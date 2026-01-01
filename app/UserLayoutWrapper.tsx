@@ -58,7 +58,7 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
   // use theme from context and apply top-level .dark class when needed
   const { theme, setTheme } = useTheme()
   const { isMobile } = useDevice()
-  const isAmproMode = (process.env.NEXT_PUBLIC_APP_MODE || '').trim().toLowerCase() === 'ampro'
+  const isAmproMode = true
 
   // Always scroll to top on navigation so the top nav is visible.
   React.useEffect(() => {
@@ -105,8 +105,8 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
         {hideAmproTopNav
           ? null
           : isMobile
-            ? (isAmproMode ? <AmproMobileTopNav /> : <HubMobileTopNav />)
-            : (isAmproMode ? <AmproTopNav /> : <HubTopNav />)}
+            ? <AmproMobileTopNav />
+            : <AmproTopNav />}
         <main className="p-0 overflow-x-hidden">
           {children}
         </main>

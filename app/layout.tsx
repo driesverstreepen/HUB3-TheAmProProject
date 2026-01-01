@@ -8,8 +8,6 @@ import { defaultTypographyConfig, normalizeTypographyConfig, typographyConfigToC
 import { unstable_noStore as noStore } from 'next/cache'
 import TypographyLiveSync from '@/components/TypographyLiveSync'
 
-const appMode = (process.env.APP_MODE || process.env.NEXT_PUBLIC_APP_MODE || 'hub3').trim().toLowerCase()
-
 export const metadata: Metadata = {
   title: 'HUB3',
   description: 'Het next level dansnetwerk',
@@ -28,7 +26,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const isAmpro = appMode === 'ampro'
+  const isAmpro = true
 
   // Typography must be instantly changeable by super-admin; avoid caching.
   // For AmPro deploy, skip HUB3-specific DB reads.

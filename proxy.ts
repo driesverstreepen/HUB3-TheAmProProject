@@ -2,11 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function proxy(request: NextRequest) {
-  const appMode = (process.env.APP_MODE || process.env.NEXT_PUBLIC_APP_MODE || "hub3").trim().toLowerCase();
+  const appMode = "ampro";
   const pathname = request.nextUrl.pathname || "";
-  const allowAmproInHub3 =
-    (process.env.ENABLE_AMPRO_ROUTES || "").toLowerCase() === "true" ||
-    process.env.NODE_ENV !== "production";
 
   const isPublicAsset = (p: string) => {
     return (
@@ -20,9 +17,8 @@ export async function proxy(request: NextRequest) {
     );
   };
 
-  // Strict route separation for separate deployments.
-  // AmPro deployment: only allow /ampro and /api/ampro.
-  if (appMode === "ampro" && !isPublicAsset(String(pathname))) {
+  // AmPro-only workspace: only allow /ampro and /api/ampro.
+  if (!isPublicAsset(String(pathname))) {
     if (pathname === "/") {
       const url = request.nextUrl.clone();
       url.pathname = "/ampro";
@@ -39,27 +35,18 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // HUB3 deployment: hide AmPro routes.
-  if (
-    appMode !== "ampro" &&
-    !allowAmproInHub3 &&
-    (pathname.startsWith("/ampro") || pathname.startsWith("/api/ampro"))
-  ) {
-    return new NextResponse("Not Found", { status: 404 });
-  }
-
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  const supabaseUrl =
-    appMode === "ampro"
-      ? process.env.NEXT_PUBLIC_AMPRO_SUPABASE_URL
-      : process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey =
-    appMode === "ampro"
-      ? process.env.NEXT_PUBLIC_AMPRO_SUPABASE_ANON_KEY
-      : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      `Your project's URL and Key are required to create a Supabase client. Missing/empty: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. (APP_MODE=${appMode})`,
+    );
+  }
 
   const supabase = createServerClient(
     supabaseUrl!,

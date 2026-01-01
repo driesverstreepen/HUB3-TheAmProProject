@@ -1,16 +1,13 @@
-# AmProProject – Separate deploy (APP_MODE=ampro)
+# AmProProject – Single-mode (AmPro default)
 
 Doel: een publiek AmPro gedeelte (performances), met een login-gated dancer portal, volledig gescheiden van HUB3.
 
 ## Wat is geïmplementeerd
 
 - Route-separatie via `proxy.ts`:
-  - `APP_MODE=ampro`:
-    - `/` redirect → `/ampro`
-    - alleen `/ampro/*` en `/api/ampro/*` zijn bereikbaar
-    - alle andere routes redirecten naar `/ampro` (of 404 voor `/api/*`)
-  - `APP_MODE=hub3` (default):
-    - `/ampro/*` en `/api/ampro/*` geven 404
+  - `/` redirect → `/ampro`
+  - alleen `/ampro/*` en `/api/ampro/*` zijn bereikbaar
+  - alle andere routes redirecten naar `/ampro` (of 404 voor `/api/*`)
 - AmPro pages:
   - `/ampro` (landing)
   - `/ampro/programmas` (publiek)
@@ -46,25 +43,16 @@ Daarna kunnen we de echte admin UI bouwen (performances/forms/review/updates).
 
 ## Vereiste env vars
 
-Gebruik voor AmPro een **aparte Supabase project** (zodat dancers later niet op HUB3 kunnen inloggen).
+Deze workspace draait standaard in **AmPro**. Gebruik dus 1 Supabase project en 1 set env vars:
 
-### HUB3 deploy (bestaand)
-- `APP_MODE=hub3`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-
-### AmPro deploy (nieuw)
-- `APP_MODE=ampro`
-- `NEXT_PUBLIC_AMPRO_SUPABASE_URL`
-- `NEXT_PUBLIC_AMPRO_SUPABASE_ANON_KEY`
-- `AMPRO_SUPABASE_SERVICE_ROLE_KEY` (server-only; enkel nodig voor admin-only server reads)
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only; enkel nodig voor admin-only server reads)
 
 ## Deploy advies
 
-- Maak een **tweede Vercel project** dat naar dezelfde repo wijst.
-- Zet in dat project `APP_MODE=ampro` + de AmPro Supabase env vars.
-- Zet in de HUB3 deployment `APP_MODE=hub3` (of laat default).
+- Maak 1 Vercel project voor AmPro.
+- Zet de Supabase env vars hierboven.
 
 ## Security notes
 

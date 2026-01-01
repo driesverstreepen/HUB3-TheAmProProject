@@ -3,16 +3,8 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/ssr'
 
 export default async function AmproAdminLayout({ children }: { children: React.ReactNode }) {
-  const modeRaw = (process.env.APP_MODE || process.env.NEXT_PUBLIC_APP_MODE || 'hub3') as string
-  const mode = modeRaw.trim().toLowerCase()
-
-  // Hard block outside AmPro mode.
-  if (mode !== 'ampro') {
-    redirect('/')
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_AMPRO_SUPABASE_URL || ''
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_AMPRO_SUPABASE_ANON_KEY || ''
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim()
   if (!supabaseUrl || !supabaseAnonKey) {
     redirect('/ampro')
   }
