@@ -27,6 +27,18 @@ type ApplicationRow = {
   answers_json: any
 }
 
+type ProfileRow = {
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  birth_date: string | null
+  street: string | null
+  house_number: string | null
+  house_number_addition: string | null
+  postal_code: string | null
+  city: string | null
+}
+
 function FieldInput({
   field,
   value,
@@ -108,6 +120,7 @@ export default function AmproProgrammaApplyPage() {
   const [existing, setExisting] = useState<ApplicationRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [mustCompleteProfile, setMustCompleteProfile] = useState(false)
+  const [profile, setProfile] = useState<ProfileRow | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -125,7 +138,7 @@ export default function AmproProgrammaApplyPage() {
         // Require profile completeness before allowing inschrijving.
         const profileResp = await supabase
           .from('ampro_dancer_profiles')
-          .select('first_name,last_name,birth_date,street,house_number,house_number_addition,postal_code,city')
+          .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city')
           .eq('user_id', user.id)
           .maybeSingle()
 
@@ -179,6 +192,7 @@ export default function AmproProgrammaApplyPage() {
         const parsedFields = parseAmproFormFields(formRow?.fields_json)
 
         if (!cancelled) {
+          setProfile((profileResp.data as any) || null)
           setProgramma(perfResp.data as any)
           setForm(formRow)
           setFields(parsedFields)
@@ -218,13 +232,52 @@ export default function AmproProgrammaApplyPage() {
       }
 
       if (existing && existing.status !== 'pending') {
-        throw new Error('Je inschrijving is al beoordeeld en kan niet meer aangepast worden')
+        const s = String(existing.status || '').toLowerCase()
+        if (s === 'accepted' || s === 'rejected') {
+          throw new Error('Je inschrijving is al beoordeeld en kan niet meer aangepast worden')
+        }
+        throw new Error('Je inschrijving wordt momenteel beoordeeld en kan tijdelijk niet aangepast worden')
+      }
+
+      const missingRequiredLabels = fields
+        .filter((f) => Boolean((f as any)?.required))
+        .filter((f) => {
+          const v = (answers as any)[f.key]
+          if (f.type === 'checkbox') return !Boolean(v)
+          return !(typeof v === 'string' && v.trim().length > 0)
+        })
+        .map((f) => f.label)
+
+      if (missingRequiredLabels.length) {
+        throw new Error(`Vul alle verplichte velden in: ${missingRequiredLabels.join(', ')}`)
+      }
+
+      const latestProfileResp = await supabase
+        .from('ampro_dancer_profiles')
+        .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (latestProfileResp.error) throw latestProfileResp.error
+      const p = (latestProfileResp.data as any) || profile
+
+      const snapshot = {
+        first_name: p?.first_name ?? null,
+        last_name: p?.last_name ?? null,
+        birth_date: p?.birth_date ?? null,
+        email: user.email ?? null,
+        phone: p?.phone ?? null,
+        street: p?.street ?? null,
+        house_number: p?.house_number ?? null,
+        house_number_addition: p?.house_number_addition ?? null,
+        postal_code: p?.postal_code ?? null,
+        city: p?.city ?? null,
       }
 
       if (existing?.id) {
         const { error } = await supabase
           .from('ampro_applications')
-          .update({ answers_json: answers })
+          .update({ answers_json: answers, snapshot_json: snapshot })
           .eq('id', existing.id)
         if (error) throw error
       } else {
@@ -232,6 +285,7 @@ export default function AmproProgrammaApplyPage() {
           performance_id: programmaId,
           user_id: user.id,
           answers_json: answers,
+          snapshot_json: snapshot,
         })
         if (error) throw error
       }

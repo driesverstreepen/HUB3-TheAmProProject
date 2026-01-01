@@ -19,6 +19,13 @@ type RosterRow = {
   performance?: { id: string; title: string } | null
 }
 
+function getUserStatusLabel(status: string): string {
+  const s = String(status || '').toLowerCase()
+  if (s === 'accepted') return 'Geaccepteerd'
+  if (s === 'rejected') return 'Afgewezen'
+  return 'In behandeling'
+}
+
 export default function AmproMijnProjectenPage() {
   const router = useRouter()
   const [checking, setChecking] = useState(true)
@@ -109,7 +116,7 @@ export default function AmproMijnProjectenPage() {
               {applied.map((a) => (
                 <div key={a.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-3 py-2">
                   <div className="text-sm text-slate-700">{a.performance?.title || ''}</div>
-                  <div className="text-xs font-semibold text-slate-900">{String(a.status)}</div>
+                  <div className="text-xs font-semibold text-slate-900">{getUserStatusLabel(a.status)}</div>
                 </div>
               ))}
               {applications.length === 0 ? <div className="text-sm text-slate-600">Nog geen inschrijvingen.</div> : null}

@@ -14,11 +14,18 @@ type Programma = {
   description: string | null
   applications_open: boolean
   application_deadline: string | null
+  location_id?: string | null
   rehearsal_period_start?: string | null
   rehearsal_period_end?: string | null
   performance_dates?: string[] | null
   region?: string | null
   program_type?: 'performance' | 'workshop' | string | null
+}
+
+type LocationRow = {
+  id: string
+  name: string
+  address: string | null
 }
 
 export default function AmproProgrammaDetailPage() {
@@ -28,6 +35,7 @@ export default function AmproProgrammaDetailPage() {
   const programmaId = useMemo(() => String((params as any)?.programmaId || ''), [params])
 
   const [programma, setProgramma] = useState<Programma | null>(null)
+  const [location, setLocation] = useState<LocationRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
@@ -65,7 +73,7 @@ export default function AmproProgrammaDetailPage() {
         const { data, error } = await supabase
           .from('ampro_programmas')
           .select(
-            'id,title,description,applications_open,application_deadline,rehearsal_period_start,rehearsal_period_end,performance_dates,region,program_type',
+            'id,title,description,applications_open,application_deadline,location_id,rehearsal_period_start,rehearsal_period_end,performance_dates,region,program_type',
           )
           .eq('id', programmaId)
           .maybeSingle()
@@ -76,7 +84,22 @@ export default function AmproProgrammaDetailPage() {
           return
         }
 
-        if (!cancelled) setProgramma(data as any)
+        let loc: LocationRow | null = null
+        const locationId = (data as any)?.location_id ? String((data as any).location_id) : ''
+        if (locationId) {
+          const locResp = await supabase
+            .from('ampro_locations')
+            .select('id,name,address')
+            .eq('id', locationId)
+            .maybeSingle()
+
+          if (!locResp.error && locResp.data?.id) loc = locResp.data as any
+        }
+
+        if (!cancelled) {
+          setProgramma(data as any)
+          setLocation(loc)
+        }
       } catch (e: any) {
         if (!cancelled) showError(e?.message || 'Kon programma niet laden')
       } finally {
@@ -110,7 +133,7 @@ export default function AmproProgrammaDetailPage() {
     return null
   })()
 
-  const infoHasAny = Boolean(programma?.region || performanceDatesLabel || rehearsalLabel || programma?.application_deadline)
+  const infoHasAny = Boolean(location || performanceDatesLabel || rehearsalLabel || programma?.application_deadline)
 
   const typeLabel = (() => {
     const t = (programma?.program_type || '').toString().toLowerCase()
@@ -159,10 +182,17 @@ export default function AmproProgrammaDetailPage() {
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
                   <h2 className="text-xl font-bold text-slate-900 mb-4">Informatie</h2>
                   <div className="grid gap-3 text-sm text-slate-700">
-                    {programma.region ? (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-slate-400" />
-                        <span>Regio: {programma.region}</span>
+                    {location ? (
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
+                        <div className="grid gap-1">
+                          <div>
+                            <span className="text-slate-900">Locatie:</span> {location.name}
+                          </div>
+                          {location.address ? (
+                            <div className="text-xs text-slate-600 whitespace-pre-wrap">{location.address}</div>
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
                     {rehearsalLabel ? (
