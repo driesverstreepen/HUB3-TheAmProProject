@@ -1,0 +1,505 @@
+@import "tailwindcss";
+
+/* Tailwind v4 defaults `dark:` to `prefers-color-scheme: dark`.
+  This app toggles dark mode via a `.dark` class on <body>.
+  Redefine `dark:` so dark styles only apply when the app is actually in dark mode. */
+@custom-variant dark (&:where(body.dark, body.dark *, .dark, .dark *));
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #ffffff;
+}
+
+/* Force form controls to use dark text on light/white backgrounds across the app.
+   This ensures inputs/selects/textareas remain readable when placed on white cards.
+   Specific components can still override these with a more specific class if needed. */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"],
+textarea,
+select {
+  color: #0f172a; /* text-slate-900 */
+  background-color: #ffffff;
+  background-image: none !important;
+  /* Match the text size used by most form inputs (Tailwind `text-sm`) */
+  font-size: var(--typo-bodySm-size, 0.875rem);
+  line-height: 1.25rem;
+}
+
+/* Keep buttons and other controls as-is; we intentionally only target form controls above. */
+
+/* Hide scrollbar for carousel containers */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
+/* Subtle glow animation used by prominent action buttons */
+/* Subtle glow animation used by prominent action buttons (hover-only) */
+@keyframes glow {
+  0% { box-shadow: 0 0 0 rgba(59,130,246,0); }
+  50% { box-shadow: 0 0 14px rgba(59,130,246,0.14); }
+  100% { box-shadow: 0 0 0 rgba(59,130,246,0); }
+}
+
+/* Dark mode overrides when the <body> has the .dark class. We toggle the class
+   on the body element to avoid mutating <html> before React hydration. */
+body.dark {
+  color: #e6eef8; /* light foreground */
+  background: #000; /* black background */
+}
+
+/* Scrollbars: avoid white tracks in dark mode (desktop + horizontal scrollers). */
+body.dark,
+.dark {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent; /* thumb track */
+  scrollbar-width: thin;
+}
+body.dark *::-webkit-scrollbar,
+.dark *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+body.dark *::-webkit-scrollbar-track,
+.dark *::-webkit-scrollbar-track {
+  background: transparent;
+}
+body.dark *::-webkit-scrollbar-thumb,
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+body.dark *::-webkit-scrollbar-thumb:hover,
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Ensure top-level page wrappers that rely on Tailwind utilities become
+   fully black in dark mode. Target common combinations like `min-h-screen
+   bg-gray-50` / `min-h-screen bg-slate-50` so we don't accidentally change
+   smaller card elements that also use bg-gray-50. */
+body.dark .min-h-screen.bg-gray-50,
+body.dark .min-h-screen.bg-slate-50,
+body.dark .min-h-screen.bg-gray-100,
+body.dark .min-h-screen.bg-white {
+  background: #000 !important;
+}
+
+/* Broad rule: make any full-height page container dark in dark mode. This
+   ensures pages that use `min-h-screen` but don't apply a bg- utility also
+   become black in dark mode. Cards (with .bg-white etc.) are still handled
+   separately by the card gradient rules above. */
+body.dark .min-h-screen {
+  background: #000 !important;
+}
+
+/* Common background replacements */
+.dark .bg-white,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+body.dark .bg-white,
+body.dark .bg-slate-50,
+body.dark .bg-slate-100 {
+  /* Card/section background: subtle vertical gradient from slightly lighter dark gray to deep surface */
+  background-image: linear-gradient(180deg, rgba(12, 12, 14, 0.92), rgba(4,6,8,0.98)) !important;
+  /* Slightly darker surface tint for desktop interface sections */
+  background-color: #050f18 !important;
+  /* No lift/shadow in dark mode (flat UI) */
+  box-shadow: none !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  transition: none;
+}
+
+/* Remove Tailwind shadows in dark mode across interface pages */
+body.dark .shadow,
+body.dark .shadow-sm,
+body.dark .shadow-md,
+body.dark .shadow-lg,
+body.dark .shadow-xl,
+body.dark .shadow-2xl,
+.dark .shadow,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  box-shadow: none !important;
+}
+
+body.dark .hover\:shadow-sm:hover,
+body.dark .hover\:shadow-md:hover,
+body.dark .hover\:shadow-lg:hover,
+body.dark .hover\:shadow-xl:hover,
+body.dark .hover\:shadow-2xl:hover,
+.dark .hover\:shadow-sm:hover,
+.dark .hover\:shadow-md:hover,
+.dark .hover\:shadow-lg:hover,
+.dark .hover\:shadow-xl:hover,
+.dark .hover\:shadow-2xl:hover {
+  box-shadow: none !important;
+}
+
+/* Allow specific surfaces to opt out of the global dark-mode card shadow */
+.no-shadow { box-shadow: none !important; }
+body.dark .no-shadow,
+.dark .no-shadow,
+body.dark .bg-white.no-shadow,
+.dark .bg-white.no-shadow,
+body.dark .bg-slate-50.no-shadow,
+.dark .bg-slate-50.no-shadow,
+body.dark .bg-slate-100.no-shadow,
+.dark .bg-slate-100.no-shadow {
+  box-shadow: none !important;
+}
+
+/* Dashboard test: ultra-minimal lift/sheened effect in dark mode */
+body.dark .dashboard-surface .bg-white,
+body.dark .dashboard-surface .bg-slate-50,
+body.dark .dashboard-surface .bg-slate-100,
+.dark .dashboard-surface .bg-white,
+.dark .dashboard-surface .bg-slate-50,
+.dark .dashboard-surface .bg-slate-100 {
+  box-shadow: none !important;
+}
+
+/* Top nav surfaces shouldn't get the global card shadow */
+.nav-surface {
+  box-shadow: none !important;
+}
+body.dark .nav-surface {
+  box-shadow: none !important;
+}
+
+/* Text color adjustments */
+/* Primary */
+body.dark .text-gray-900, body.dark .text-slate-900, .dark .text-gray-900, .dark .text-slate-900 { color: #e6eef8 !important; }
+/* Strong secondary */
+body.dark .text-gray-800, body.dark .text-slate-800, .dark .text-gray-800, .dark .text-slate-800 { color: #cbd5e1 !important; }
+/* Default secondary (match UserTopNav desktop inactive tabs) */
+body.dark .text-gray-700, body.dark .text-slate-700, .dark .text-gray-700, .dark .text-slate-700 { color: #94a3b8 !important; }
+body.dark .text-gray-600, body.dark .text-slate-600, .dark .text-gray-600, .dark .text-slate-600 { color: #94a3b8 !important; }
+body.dark .text-gray-500, body.dark .text-slate-500, .dark .text-gray-500, .dark .text-slate-500 { color: #94a3b8 !important; }
+
+/* Border color adjustments */
+body.dark .border-gray-200, body.dark .border-slate-200, body.dark .border-slate-100, .dark .border-gray-200, .dark .border-slate-200, .dark .border-slate-100 { border-color: rgba(255,255,255,0.06) !important; }
+
+/* Hover backgrounds used in navigation and buttons */
+body.dark .hover\:bg-gray-100:hover, .dark .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.03) !important; }
+body.dark .hover\:bg-red-50:hover, .dark .hover\:bg-red-50:hover { background-color: rgba(255,0,0,0.03) !important; }
+
+/* Buttons / prominent actions — keep the blue gradient but with slightly brighter text */
+body.dark .text-white, .dark .text-white { color: #f8fafc !important; }
+
+/* Form controls in dark mode */
+body.dark input[type="text"],
+body.dark input[type="email"],
+body.dark input[type="password"],
+body.dark input[type="number"],
+body.dark input[type="time"],
+body.dark input[type="date"],
+body.dark input[type="datetime-local"],
+body.dark textarea,
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="number"],
+.dark input[type="time"],
+.dark input[type="date"],
+.dark input[type="datetime-local"],
+.dark textarea,
+.dark textarea {
+  color: #e6eef8;
+  /* In dark mode, inputs should blend into their surrounding surface.
+     Keep them transparent so cards/sections define the background. */
+  background-color: transparent !important;
+  background-image: none !important;
+  font-size: var(--typo-bodySm-size, 0.875rem);
+  line-height: 1.25rem;
+}
+
+/* Selectors (select elements): in dark mode they should not get a gradient/blue fill.
+   Keep them transparent so they match the surface they sit on (page black or card surface). */
+body.dark select,
+.dark select {
+  color: #e6eef8;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* ---- Elevation utilities (consistent depth scale) ---- */
+/* elev-0: flat, elev-1: raised (cards), elev-2: floating (modals, overlays) */
+.elev-0 { box-shadow: none; border: 1px solid rgba(15,23,42,0.04); }
+.elev-1 { box-shadow: 0 6px 18px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
+.elev-2 { box-shadow: 0 18px 40px rgba(2,6,23,0.09); border: 1px solid rgba(2,6,23,0.08); }
+
+/* Dark-mode variants: lighter/softer halo with subtle inner highlights */
+body.dark .elev-0 { box-shadow: none; border: 1px solid rgba(255,255,255,0.02); }
+body.dark .elev-1 { box-shadow: none; border: 1px solid rgba(255,255,255,0.03); }
+body.dark .elev-2 { box-shadow: none; border: 1px solid rgba(255,255,255,0.04); }
+
+.dark .elev-0 { box-shadow: none; border: 1px solid rgba(255,255,255,0.02); }
+.dark .elev-1 { box-shadow: none; border: 1px solid rgba(255,255,255,0.03); }
+.dark .elev-2 { box-shadow: none; border: 1px solid rgba(255,255,255,0.04); }
+
+/* Desaturated near-white token for large text and subtle highlights */
+:root {
+  --near-white: #f8fafc; /* used for buttons and small accents */
+  /* Typography semantic colors (used as defaults in global typography config) */
+  --typo-fg: #0f172a; /* slate-900 */
+  --typo-muted: #475569; /* slate-600 */
+  --typo-subtle: #64748b; /* slate-500 */
+}
+body.dark,
+.dark {
+  --surface-text: #e6eef8; /* slightly desaturated white for large text */
+  --near-white: #e6eef8;
+  --typo-fg: #e6eef8;
+  --typo-muted: #cbd5e1;
+  /* Match the light grey used by UserTopNav desktop inactive tabs */
+  --typo-subtle: #94a3b8;
+
+  /* Force token-driven “meta” text to be light grey in dark mode,
+     even when typography values are injected from Supabase. */
+  --typo-subtitle-color: var(--typo-subtle);
+  --typo-bodySm-color: var(--typo-subtle);
+  --typo-label-color: var(--typo-subtle);
+  --typo-caption-color: var(--typo-subtle);
+}
+
+/* Use the new token to reduce emphasis on pure white elements */
+.text-surface { color: var(--surface-text) !important; }
+.text-near-white { color: var(--near-white) !important; }
+
+/* Ensure titles inside light cards are dark in light mode and readable in dark mode */
+/* This catches any stray `text-white` on headings rendered inside card surfaces. */
+.bg-white h1, .bg-white h2, .bg-white h3,
+.bg-slate-50 h1, .bg-slate-50 h2, .bg-slate-50 h3,
+.elev-0 h1, .elev-0 h2, .elev-0 h3,
+.elev-1 h1, .elev-1 h2, .elev-1 h3,
+.card h1, .card h2, .card h3 {
+  color: #0f172a !important; /* text-slate-900 */
+}
+body.dark .bg-white h1, body.dark .bg-white h2, body.dark .bg-white h3,
+body.dark .bg-slate-50 h1, body.dark .bg-slate-50 h2, body.dark .bg-slate-50 h3,
+body.dark .elev-0 h1, body.dark .elev-0 h2, body.dark .elev-0 h3,
+body.dark .elev-1 h1, body.dark .elev-1 h2, body.dark .elev-1 h3,
+body.dark .card h1, body.dark .card h2, body.dark .card h3 {
+  color: #e6eef8 !important; /* near-white in dark mode */
+}
+
+/* Form control improvements in dark mode */
+input::placeholder, textarea::placeholder { color: rgba(15,23,42,0.44); }
+body.dark input::placeholder, body.dark textarea::placeholder, .dark input::placeholder, .dark textarea::placeholder {
+  color: rgba(230,238,248,0.28); /* readable but subdued */
+}
+
+/* Inner subtle highlight for inputs on focus and hover */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.06) inset, 0 2px 6px rgba(2,6,23,0.04);
+}
+body.dark input:focus, body.dark textarea:focus, body.dark select:focus, .dark input:focus, .dark textarea:focus, .dark select:focus {
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.06) inset, 0 6px 18px rgba(255,255,255,0.02);
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Subtle default transitions for interactive elements */
+button, a, input, select, textarea { transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease; }
+
+/* Utility helpers for using the elevation classes with existing components */
+.card { border-radius: 0.75rem; }
+
+/* Utility to remove the gradient/background-image applied by dark-mode card rules
+   Use on list items and compact surfaces where a flat background is preferred. */
+.no-gradient { background-image: none !important; }
+body.dark .no-gradient { 
+  background-image: none !important;
+  /* make lists solid dark rather than a gradient surface */
+  background-color: #071421 !important;
+  /* reduce halo for flat list surfaces */
+  box-shadow: none !important;
+  border: 1px solid rgba(255,255,255,0.02) !important;
+}
+
+/* ---- Typography labels (global, configurable via super-admin) ---- */
+/* Use :where() so Tailwind utility classes can still override when needed. */
+:where(.t-display) {
+  font-size: var(--typo-display-size);
+  line-height: 1.1;
+  color: var(--typo-display-color);
+}
+
+:where(.t-h1) {
+  font-size: var(--typo-h1-size);
+  line-height: 1.15;
+  color: var(--typo-h1-color);
+}
+
+:where(.t-h2) {
+  font-size: var(--typo-h2-size);
+  line-height: 1.2;
+  color: var(--typo-h2-color);
+}
+
+:where(.t-h3) {
+  font-size: var(--typo-h3-size);
+  line-height: 1.25;
+  color: var(--typo-h3-color);
+}
+
+:where(.t-h4) {
+  font-size: var(--typo-h4-size);
+  line-height: 1.25;
+  color: var(--typo-h4-color);
+}
+
+:where(.t-subtitle) {
+  font-size: var(--typo-subtitle-size);
+  line-height: 1.35;
+  color: var(--typo-subtitle-color);
+}
+
+:where(.t-body) {
+  font-size: var(--typo-body-size);
+  line-height: 1.5;
+  color: var(--typo-body-color);
+}
+
+:where(.t-bodySm) {
+  font-size: var(--typo-bodySm-size);
+  line-height: 1.45;
+  color: var(--typo-bodySm-color);
+}
+
+:where(.t-caption) {
+  font-size: var(--typo-caption-size);
+  line-height: 1.35;
+  color: var(--typo-caption-color);
+}
+
+:where(.t-label) {
+  font-size: var(--typo-label-size);
+  line-height: 1.25;
+  color: var(--typo-label-color);
+}
+
+:where(.t-button) {
+  font-size: var(--typo-button-size);
+  line-height: 1.25;
+  color: var(--typo-button-color);
+}
+
+:where(.t-noColor) {
+  /* Don't force a color from typography tokens.
+     Important: no !important here, so explicit Tailwind `text-*` utilities can still win. */
+  color: inherit;
+}
+
+/* ---- Marketing typography labels (welcome/landing pages) ----
+   These intentionally control ONLY size/line-height so marketing pages can
+   deviate from the app typography without affecting token-driven colors.
+   Use Tailwind `text-*` utilities (or default inheritance) for color. */
+:where(.m-heroTitle) {
+  font-size: clamp(2.75rem, 5vw, 3.75rem); /* ~text-5xl → ~text-6xl */
+  line-height: 1.05;
+}
+
+:where(.m-heroSubtitle) {
+  font-size: clamp(1.125rem, 2.2vw, 1.5rem); /* ~text-lg → ~text-2xl */
+  line-height: 1.35;
+}
+
+:where(.m-sectionTitle) {
+  font-size: clamp(1.875rem, 3.2vw, 2.25rem); /* ~text-3xl → ~text-4xl */
+  line-height: 1.15;
+}
+
+:where(.m-cardTitle) {
+  font-size: 1.4rem; /* ~text-xl */
+  line-height: 1.25;
+}
+
+:where(.m-kpi) {
+  font-size: 1.5rem; /* ~text-2xl */
+  line-height: 1.15;
+}
+
+:where(.m-bodyLg) {
+  font-size: 1.2rem; /* ~text-lg */
+  line-height: 1.6;
+}
+
+:where(.m-body) {
+  font-size: 1rem; /* base */
+  line-height: 1.6;
+}
+
+:where(.m-bodySm) {
+  font-size: 0.875rem; /* ~text-sm */
+  line-height: 1.4;
+}
+
+:where(.m-caption) {
+  font-size: 0.8rem; /* ~text-xs */
+  line-height: 1.35;
+}
+
+:where(.m-button) {
+  font-size: 1.1rem; /* ~text-base */
+  line-height: 1.25;
+}
+
+/* Prominent action button - shared layout utility
+   Use this class together with color-specific gradient classes
+   (e.g. `bg-linear-to-r from-blue-500 to-blue-600`) so only the
+   color/gradient varies between buttons. Keeps width, padding,
+   font, and shadow consistent across the app. */
+.btn-prominent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem; /* similar to Tailwind `gap-2` */
+  padding: 0.5rem 1rem; /* `py-2 px-4` */
+  border-radius: 0.5rem; /* `rounded-lg` */
+  font-size: 0.875rem; /* `text-sm` */
+  font-weight: 600; /* `font-semibold` */
+  color: #ffffff; /* default white text */
+  width: 11rem; /* `w-44` */
+  margin-left: auto; /* `mx-auto` */
+  margin-right: auto;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.06); /* similar to `shadow-md` */
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+.btn-prominent:hover {
+  box-shadow: 0 10px 28px rgba(2,6,23,0.09); /* similar to `hover:shadow-lg` */
+}
+.btn-prominent:focus { outline: none; }
+
+

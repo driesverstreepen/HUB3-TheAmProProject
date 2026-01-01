@@ -1,0 +1,7 @@
+{
+  "id": "078",
+  "filename": "078_add_public_teacher_profile_columns.sql",
+  "description": "Add city and dance_style columns to public_teacher_profiles",
+  "created_by": "dev-automation",
+  "created_at": "2025-11-09T00:00:00Z"
+}

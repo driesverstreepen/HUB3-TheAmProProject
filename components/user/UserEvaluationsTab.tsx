@@ -1,0 +1,241 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Star, TrendingUp, Calendar } from 'lucide-react'
+
+interface Evaluation {
+  id: string
+  program_name: string
+  teacher_full_name: string
+  score: number
+  comment: string
+  criteria: Record<string, number> | null
+  created_at: string
+  updated_at: string
+}
+
+export default function UserEvaluationsTab() {
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [groupedByProgram, setGroupedByProgram] = useState<Record<string, Evaluation[]>>({})
+
+
+
+  useEffect(() => {
+    loadEvaluations()
+  }, [])
+
+  const loadEvaluations = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Get user's studio
+    const { data: enrollment } = await supabase
+      .from('enrollments')
+      .select('studio_id')
+      .eq('user_id', user.id)
+      .eq('deleted', false)
+      .limit(1)
+      .single()
+
+    if (!enrollment) return
+
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    
+    // Fetch visible evaluations for this user
+    const response = await fetch(
+      `/api/studio/${enrollment.studio_id}/evaluations?userId=${user.id}&visible=true`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+
+    if (response.ok) {
+      const data = await response.json()
+      setEvaluations(data)
+
+      // Group by program
+      const grouped = data.reduce((acc: Record<string, Evaluation[]>, evaluation: Evaluation) => {
+        const programName = evaluation.program_name
+        if (!acc[programName]) {
+          acc[programName] = []
+        }
+        acc[programName].push(evaluation)
+        return acc
+      }, {})
+
+      setGroupedByProgram(grouped)
+    }
+
+    setLoading(false)
+  }
+
+  const calculateAverageScore = (evals: Evaluation[]) => {
+    if (evals.length === 0) return 0
+    const sum = evals.reduce((acc, e) => acc + e.score, 0)
+    return (sum / evals.length).toFixed(1)
+  }
+
+  const getCriteriaLabel = (key: string) => {
+    const labels: Record<string, string> = {
+      technique: 'Techniek',
+      creativity: 'Creativiteit',
+      dedication: 'Inzet',
+      progress: 'Vooruitgang'
+    }
+    return labels[key] || key
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-48 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (evaluations.length === 0) {
+    return (
+      <div className="p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+          <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            Nog geen evaluaties
+          </h3>
+          <p className="text-gray-600">
+            Zodra je leraar een evaluatie geeft, verschijnt deze hier
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-8 max-w-6xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Mijn Evaluaties</h1>
+        <p className="text-gray-600">Bekijk de feedback van je leraren</p>
+      </div>
+
+      {/* Overall Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Star className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Totaal Evaluaties</p>
+              <p className="text-2xl font-bold text-gray-900">{evaluations.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Gemiddelde Score</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {calculateAverageScore(evaluations)}/10
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-green-100 rounded-lg">
+              <Calendar className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Laatste Evaluatie</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {new Date(evaluations[0].updated_at).toLocaleDateString('nl-NL')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Evaluations by Program */}
+      <div className="space-y-6">
+        {Object.entries(groupedByProgram).map(([programName, programEvaluations]) => (
+          <div key={programName} className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">{programName}</h2>
+                <div className="flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  <span className="font-semibold text-gray-900">
+                    {calculateAverageScore(programEvaluations)}/10
+                  </span>
+                  <span className="text-sm text-gray-500 ml-2">
+                    ({programEvaluations.length} {programEvaluations.length === 1 ? 'evaluatie' : 'evaluaties'})
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-200">
+              {programEvaluations.map((evaluation) => (
+                <div key={evaluation.id} className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">
+                        Leraar: <span className="font-medium text-gray-900">{evaluation.teacher_full_name}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(evaluation.created_at).toLocaleDateString('nl-NL', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-lg">
+                      <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                      <span className="text-xl font-bold text-gray-900">{evaluation.score}/10</span>
+                    </div>
+                  </div>
+
+                  {evaluation.criteria && Object.keys(evaluation.criteria).length > 0 && (
+                    <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {Object.entries(evaluation.criteria).map(([key, value]) => (
+                        <div key={key} className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-600 mb-1">{getCriteriaLabel(key)}</p>
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all"
+                                style={{ width: `${(value / 10) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900">{value}/10</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {evaluation.comment && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-900 mb-1">Feedback</p>
+                      <p className="text-gray-700">{evaluation.comment}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
