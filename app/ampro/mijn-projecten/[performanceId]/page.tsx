@@ -1,0 +1,470 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
+import { ArrowLeft, Calendar, MapPin } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import ContentContainer from '@/components/ContentContainer'
+import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
+import { useNotification } from '@/contexts/NotificationContext'
+
+type Programma = {
+  id: string
+  title: string
+  description: string | null
+  location_id?: string | null
+  rehearsal_period_start?: string | null
+  rehearsal_period_end?: string | null
+  performance_dates?: string[] | null
+  region?: string | null
+  program_type?: 'performance' | 'workshop' | string | null
+}
+
+type LocationRow = {
+  id: string
+  name: string
+  address: string | null
+}
+
+type NoteRow = {
+  id: string
+  title: string
+  body: string
+  created_at: string
+}
+
+type AvailabilityRequestRow = {
+  id: string
+  performance_id: string
+  is_visible: boolean
+  responses_locked?: boolean
+  responses_lock_at?: string | null
+}
+
+type AvailabilityDateRow = {
+  id: string
+  request_id: string
+  day: string
+}
+
+type AvailabilityResponseRow = {
+  request_date_id: string
+  status: 'yes' | 'no' | 'maybe'
+  comment: string | null
+}
+
+function formatYesNoMaybe(status: 'yes' | 'no' | 'maybe'): string {
+  if (status === 'yes') return 'Beschikbaar'
+  if (status === 'no') return 'Niet beschikbaar'
+  return 'Misschien'
+}
+
+export default function AmproMijnProjectenDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const { showError, showSuccess } = useNotification()
+  const performanceId = useMemo(() => String((params as any)?.performanceId || ''), [params])
+
+  const [checking, setChecking] = useState(true)
+  const [programma, setProgramma] = useState<Programma | null>(null)
+  const [location, setLocation] = useState<LocationRow | null>(null)
+  const [notes, setNotes] = useState<NoteRow[]>([])
+
+  const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
+  const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
+  const [availabilityDraft, setAvailabilityDraft] = useState<Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }>>({})
+  const [savingAvailability, setSavingAvailability] = useState(false)
+  const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponse] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        setChecking(true)
+
+        const { data: sessionData } = await supabase.auth.getSession()
+        const user = sessionData?.session?.user
+        if (!user) {
+          router.replace(`/ampro/login?next=${encodeURIComponent(`/ampro/mijn-projecten/${performanceId}`)}`)
+          return
+        }
+
+        // Require that the user is accepted (in roster) for this performance.
+        const rosterResp = await supabase
+          .from('ampro_roster')
+          .select('performance_id')
+          .eq('performance_id', performanceId)
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (rosterResp.error) throw rosterResp.error
+        if (!rosterResp.data?.performance_id) {
+          router.replace('/ampro/mijn-projecten')
+          return
+        }
+
+        const perfResp = await supabase
+          .from('ampro_programmas')
+          .select(
+            'id,title,description,location_id,rehearsal_period_start,rehearsal_period_end,performance_dates,region,program_type',
+          )
+          .eq('id', performanceId)
+          .maybeSingle()
+
+        if (perfResp.error) throw perfResp.error
+        if (!perfResp.data?.id) {
+          router.replace('/ampro/mijn-projecten')
+          return
+        }
+
+        let loc: LocationRow | null = null
+        const locationId = (perfResp.data as any)?.location_id ? String((perfResp.data as any).location_id) : ''
+        if (locationId) {
+          const locResp = await supabase
+            .from('ampro_locations')
+            .select('id,name,address')
+            .eq('id', locationId)
+            .maybeSingle()
+
+          if (!locResp.error && locResp.data?.id) loc = locResp.data as any
+        }
+
+        const notesResp = await supabase
+          .from('ampro_updates')
+          .select('id,title,body,created_at')
+          .eq('performance_id', performanceId)
+          .order('created_at', { ascending: false })
+
+        if (notesResp.error) throw notesResp.error
+
+        // Availability request (RLS allows:
+        // - assigned + visible, OR
+        // - assigned + already responded, so users can re-consult later)
+        const reqResp = await supabase
+          .from('ampro_availability_requests')
+          .select('id,performance_id,is_visible,responses_locked,responses_lock_at')
+          .eq('performance_id', performanceId)
+          .maybeSingle()
+
+        if (reqResp.error) throw reqResp.error
+
+        let dates: AvailabilityDateRow[] = []
+        let draft: Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }> = {}
+        let anyResponse = false
+
+        if (reqResp.data?.id) {
+          const datesResp = await supabase
+            .from('ampro_availability_request_dates')
+            .select('id,request_id,day')
+            .eq('request_id', reqResp.data.id)
+            .order('day', { ascending: true })
+
+          if (datesResp.error) throw datesResp.error
+          dates = (datesResp.data as any) || []
+
+          if (dates.length) {
+            const responsesResp = await supabase
+              .from('ampro_availability_responses')
+              .select('request_date_id,status,comment')
+              .eq('user_id', user.id)
+              .in(
+                'request_date_id',
+                dates.map((d) => d.id),
+              )
+
+            if (responsesResp.error) throw responsesResp.error
+
+            const byDateId: Record<string, AvailabilityResponseRow> = {}
+            for (const r of (responsesResp.data as any) || []) {
+              const id = String((r as any)?.request_date_id || '')
+              if (!id) continue
+              byDateId[id] = r as any
+              anyResponse = true
+            }
+
+            for (const d of dates) {
+              const existing = byDateId[String(d.id)]
+              const status = (existing?.status || 'maybe') as any
+              const comment = String(existing?.comment || '')
+              draft[String(d.id)] = {
+                status: status === 'yes' || status === 'no' ? status : 'maybe',
+                comment,
+              }
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setProgramma(perfResp.data as any)
+          setLocation(loc)
+          setNotes((notesResp.data as any) || [])
+          setAvailabilityRequest((reqResp.data as any) || null)
+          setAvailabilityDates(dates)
+          setAvailabilityDraft(draft)
+          setHasAnyAvailabilityResponse(anyResponse)
+        }
+      } catch (e: any) {
+        if (!cancelled) showError(e?.message || 'Kon programma niet laden')
+      } finally {
+        if (!cancelled) setChecking(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [performanceId, router])
+
+  const typeLabel = (() => {
+    const t = (programma?.program_type || '').toString().toLowerCase()
+    if (t === 'workshop') return 'Workshop'
+    if (t === 'performance') return 'Voorstelling'
+    return t ? t : 'Programma'
+  })()
+
+  const performanceDatesLabel = (() => {
+    const dates = programma?.performance_dates || []
+    if (!Array.isArray(dates) || dates.length === 0) return null
+    return dates.map((d) => formatDateOnlyFromISODate(d)).join(', ')
+  })()
+
+  const rehearsalLabel = (() => {
+    const start = programma?.rehearsal_period_start
+    const end = programma?.rehearsal_period_end
+    if (start && end) return `${formatDateOnlyFromISODate(start)} – ${formatDateOnlyFromISODate(end)}`
+    if (start) return `vanaf ${formatDateOnlyFromISODate(start)}`
+    if (end) return `tot ${formatDateOnlyFromISODate(end)}`
+    return null
+  })()
+
+  const infoHasAny = Boolean(location || performanceDatesLabel || rehearsalLabel)
+
+  const availabilityLocked = Boolean(
+    availabilityRequest &&
+      (Boolean((availabilityRequest as any)?.responses_locked) ||
+        (availabilityRequest as any)?.responses_lock_at && isISODatePast(String((availabilityRequest as any).responses_lock_at))),
+  )
+
+  const canEditAvailability = Boolean(
+    availabilityRequest?.id && !availabilityLocked && (availabilityRequest?.is_visible || hasAnyAvailabilityResponse),
+  )
+
+  async function saveAvailability() {
+    try {
+      if (!availabilityRequest?.id) return
+      if (!availabilityDates.length) return
+      if (!canEditAvailability) {
+        throw new Error('Beschikbaarheid is vergrendeld of kan niet meer aangepast worden')
+      }
+
+      setSavingAvailability(true)
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const user = sessionData?.session?.user
+      if (!user) throw new Error('Je bent niet ingelogd')
+
+      const rows = availabilityDates.map((d) => {
+        const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
+        return {
+          request_date_id: d.id,
+          user_id: user.id,
+          status: v.status,
+          comment: v.comment.trim() || null,
+        }
+      })
+
+      const { error } = await supabase
+        .from('ampro_availability_responses')
+        .upsert(rows as any, { onConflict: 'request_date_id,user_id' })
+
+      if (error) throw error
+      showSuccess('Beschikbaarheid opgeslagen')
+    } catch (e: any) {
+      showError(e?.message || 'Opslaan mislukt')
+    } finally {
+      setSavingAvailability(false)
+    }
+  }
+
+  if (checking) return <div className="min-h-screen bg-white" />
+
+  if (!programma) {
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-12">
+          <Link href="/ampro/mijn-projecten" className="text-sm font-semibold text-slate-900">
+            ← Terug
+          </Link>
+          <div className="mt-6 text-sm text-slate-600">Programma niet gevonden.</div>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <ContentContainer className="py-8">
+        <button
+          type="button"
+          onClick={() => router.push('/ampro/mijn-projecten')}
+          className="mb-6 inline-flex items-center gap-2 text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Terug naar mijn projecten
+        </button>
+
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+            <h1 className="text-3xl font-bold text-slate-900">{programma.title}</h1>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {typeLabel}
+              </span>
+              {programma.region ? (
+                <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                  {programma.region}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          {infoHasAny ? (
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900 mb-4">Informatie</h2>
+              <div className="grid gap-3 text-sm text-slate-700">
+                {location ? (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
+                    <div className="grid gap-1">
+                      <div>
+                        <span className="text-slate-900">Locatie:</span> {location.name}
+                      </div>
+                      {location.address ? (
+                        <div className="text-xs text-slate-600 whitespace-pre-wrap">{location.address}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {rehearsalLabel ? (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <span>Repetitie periode: {rehearsalLabel}</span>
+                  </div>
+                ) : null}
+
+                {performanceDatesLabel ? (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <span>Voorstellingsdata: {performanceDatesLabel}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {programma.description ? (
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900 mb-4">Beschrijving</h2>
+              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
+            </div>
+          ) : null}
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Notes</h2>
+            <div className="grid gap-3">
+              {notes.map((n) => (
+                <div key={n.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="text-sm font-semibold text-slate-900">{n.title}</div>
+                  <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
+                </div>
+              ))}
+              {notes.length === 0 ? <div className="text-sm text-slate-600">Nog geen notes.</div> : null}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Beschikbaarheid</h2>
+
+            {!availabilityRequest?.id ? (
+              <div className="text-sm text-slate-600">Er is momenteel geen beschikbaarheidsvraag.</div>
+            ) : availabilityDates.length === 0 ? (
+              <div className="text-sm text-slate-600">Geen data ingesteld.</div>
+            ) : (
+              <div className="space-y-4">
+                {!canEditAvailability ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    Beschikbaarheid is vergrendeld. Je kan je antwoorden nog bekijken maar niet meer aanpassen.
+                  </div>
+                ) : null}
+                {availabilityDates.map((d) => {
+                  const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
+                  return (
+                    <div key={d.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="text-sm font-semibold text-slate-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+
+                      <div className="mt-3 grid gap-3">
+                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                          Status
+                          <select
+                            value={v.status}
+                            onChange={(e) =>
+                              setAvailabilityDraft((prev) => ({
+                                ...prev,
+                                [String(d.id)]: { ...v, status: e.target.value as any },
+                              }))
+                            }
+                            disabled={!canEditAvailability}
+                            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                          >
+                            <option value="yes">Beschikbaar</option>
+                            <option value="no">Niet beschikbaar</option>
+                            <option value="maybe">Misschien</option>
+                          </select>
+                        </label>
+
+                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                          Comment (optioneel)
+                          <textarea
+                            value={v.comment}
+                            onChange={(e) =>
+                              setAvailabilityDraft((prev) => ({
+                                ...prev,
+                                [String(d.id)]: { ...v, comment: e.target.value },
+                              }))
+                            }
+                            disabled={!canEditAvailability}
+                            placeholder="Bv. 30 min later op deze datum…"
+                            className="min-h-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          />
+                        </label>
+
+                        <div className="text-xs text-slate-600">Huidig: {formatYesNoMaybe(v.status)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                <button
+                  type="button"
+                  onClick={saveAvailability}
+                  disabled={savingAvailability || !canEditAvailability}
+                  className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    savingAvailability || !canEditAvailability
+                      ? 'bg-blue-100 text-blue-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {savingAvailability ? 'Opslaan…' : 'Opslaan beschikbaarheid'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </ContentContainer>
+    </div>
+  )
+}

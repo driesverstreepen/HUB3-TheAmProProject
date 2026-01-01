@@ -79,6 +79,22 @@ export default function AmproMijnProjectenPage() {
   }, [router])
 
   const applied = useMemo(() => applications.filter((a) => a.status !== 'accepted'), [applications])
+  const acceptedPrograms = useMemo(() => {
+    const seen = new Set<string>()
+    const out: Array<{ performance_id: string; title: string; role_name: string | null }> = []
+    for (const r of roster) {
+      const pid = String(r.performance_id || '')
+      if (!pid) continue
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      out.push({
+        performance_id: pid,
+        title: String(r.performance?.title || pid),
+        role_name: r.role_name ?? null,
+      })
+    }
+    return out
+  }, [roster])
 
   if (checking) {
     return <div className="min-h-screen bg-white" />
@@ -98,13 +114,22 @@ export default function AmproMijnProjectenPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <div className="text-sm font-semibold text-slate-900">Geaccepteerd</div>
             <div className="mt-4 grid gap-2">
-              {roster.map((r) => (
-                <div key={`${r.performance_id}-${r.added_at}`} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-3 py-2">
-                  <div className="text-sm text-slate-700">{r.performance?.title || r.performance_id}</div>
-                  <div className="text-xs text-slate-600">{r.role_name || ''}</div>
-                </div>
+              {acceptedPrograms.map((p) => (
+                <Link
+                  key={p.performance_id}
+                  href={`/ampro/mijn-projecten/${encodeURIComponent(p.performance_id)}`}
+                  className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900 truncate">{p.title}</div>
+                      {p.role_name ? <div className="mt-1 text-xs text-slate-600">Rol: {p.role_name}</div> : null}
+                    </div>
+                    <div className="text-xs font-semibold text-slate-900">Bekijk</div>
+                  </div>
+                </Link>
               ))}
-              {roster.length === 0 ? <div className="text-sm text-slate-600">Nog niets geaccepteerd.</div> : null}
+              {acceptedPrograms.length === 0 ? <div className="text-sm text-slate-600">Nog niets geaccepteerd.</div> : null}
             </div>
           </div>
 
@@ -120,12 +145,6 @@ export default function AmproMijnProjectenPage() {
                 </div>
               ))}
               {applications.length === 0 ? <div className="text-sm text-slate-600">Nog geen inschrijvingen.</div> : null}
-            </div>
-
-            <div className="mt-4">
-              <Link href="/ampro/programmas" className="text-sm font-semibold text-slate-900">
-                Bekijk programma’s
-              </Link>
             </div>
           </div>
         </div>

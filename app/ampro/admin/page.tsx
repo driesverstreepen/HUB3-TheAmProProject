@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2 } from 'lucide-react'
+import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isAmproAdmin, parseAmproFormFields, type AmproFormField } from '@/lib/ampro'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -12,7 +12,7 @@ import SearchFilterBar from '@/components/SearchFilterBar'
 import Modal from '@/components/Modal'
 import ActionIcon from '@/components/ActionIcon'
 
-type AdminSection = 'programmas' | 'forms' | 'notes' | 'applications' | 'members' | 'locations'
+type AdminSection = 'programmas' | 'forms' | 'notes' | 'applications' | 'members' | 'locations' | 'availability'
 
 function parseFlexibleDateToISODate(input: string): string | null {
   const v = (input || '').trim()
@@ -109,6 +109,14 @@ function uniqueKey(base: string, used: Set<string>, fallbackBase = 'field') {
   return out
 }
 
+function availabilityStatusLabel(status: string | null | undefined) {
+  const s = String(status || '').toLowerCase()
+  if (s === 'yes') return 'Beschikbaar'
+  if (s === 'no') return 'Niet beschikbaar'
+  if (s === 'maybe') return 'Misschien'
+  return 'Geen antwoord'
+}
+
 export default function AmproAdminPage() {
   const router = useRouter()
   const { showSuccess, showError } = useNotification()
@@ -119,8 +127,247 @@ export default function AmproAdminPage() {
   const [forms, setForms] = useState<any[]>([])
   const [formIdByProgramId, setFormIdByProgramId] = useState<Record<string, string>>({})
   const [applications, setApplications] = useState<any[]>([])
+  const [roster, setRoster] = useState<any[]>([])
   const [updates, setUpdates] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
+
+  const [availabilityPerformanceId, setAvailabilityPerformanceId] = useState('')
+  const [availabilityRequestId, setAvailabilityRequestId] = useState<string | null>(null)
+  const [availabilityVisible, setAvailabilityVisible] = useState(false)
+  const [availabilityLocked, setAvailabilityLocked] = useState(false)
+  const [availabilityLockAt, setAvailabilityLockAt] = useState('')
+  const [availabilityDatesText, setAvailabilityDatesText] = useState('')
+  const [availabilitySelectedUserIds, setAvailabilitySelectedUserIds] = useState<string[]>([])
+  const [availabilityOverview, setAvailabilityOverview] = useState<
+    Array<{ day: string; rows: Array<{ user_id: string; status: string | null; comment: string | null }> }>
+  >([])
+  const [savingAvailability, setSavingAvailability] = useState(false)
+
+  useEffect(() => {
+    if (!availabilityPerformanceId && performances.length) {
+      setAvailabilityPerformanceId(String((performances as any[])[0]?.id || ''))
+    }
+  }, [availabilityPerformanceId, performances])
+
+  const acceptedUserIdsForSelectedPerformance = (() => {
+    const pid = String(availabilityPerformanceId || '')
+    if (!pid) return [] as string[]
+    return roster
+      .filter((r: any) => String(r?.performance_id || '') === pid)
+      .map((r: any) => String(r?.user_id || ''))
+      .filter(Boolean)
+  })()
+
+  async function loadAvailability(performanceId: string) {
+    try {
+      setAvailabilityRequestId(null)
+      setAvailabilityVisible(false)
+      setAvailabilityLocked(false)
+      setAvailabilityLockAt('')
+      setAvailabilityDatesText('')
+      setAvailabilitySelectedUserIds([])
+      setAvailabilityOverview([])
+
+      if (!performanceId) return
+
+      const reqResp = await supabase
+        .from('ampro_availability_requests')
+        .select('id,performance_id,is_visible,responses_locked,responses_lock_at')
+        .eq('performance_id', performanceId)
+        .maybeSingle()
+
+      if (reqResp.error) throw reqResp.error
+
+      if (!reqResp.data?.id) {
+        setAvailabilityRequestId(null)
+        setAvailabilityVisible(false)
+        setAvailabilityLocked(false)
+        setAvailabilityLockAt('')
+        setAvailabilityDatesText('')
+        setAvailabilitySelectedUserIds(acceptedUserIdsForSelectedPerformance)
+        setAvailabilityOverview([])
+        return
+      }
+
+      const requestId = String((reqResp.data as any).id)
+      setAvailabilityRequestId(requestId)
+      setAvailabilityVisible(Boolean((reqResp.data as any).is_visible))
+      setAvailabilityLocked(Boolean((reqResp.data as any).responses_locked))
+      setAvailabilityLockAt(
+        (reqResp.data as any)?.responses_lock_at ? formatDateOnlyFromISODate(String((reqResp.data as any).responses_lock_at)) : '',
+      )
+
+      const datesResp = await supabase
+        .from('ampro_availability_request_dates')
+        .select('id,day')
+        .eq('request_id', requestId)
+        .order('day', { ascending: true })
+
+      if (datesResp.error) throw datesResp.error
+      const dates = (datesResp.data as any[]) || []
+      setAvailabilityDatesText(dates.map((d) => formatDateOnlyFromISODate(String(d.day))).join('\n'))
+
+      const dateIds = dates.map((d) => String(d.id)).filter(Boolean)
+      if (!dateIds.length) {
+        setAvailabilitySelectedUserIds(acceptedUserIdsForSelectedPerformance)
+        setAvailabilityOverview([])
+        return
+      }
+
+      const duResp = await supabase
+        .from('ampro_availability_request_date_users')
+        .select('request_date_id,user_id')
+        .in('request_date_id', dateIds)
+
+      if (duResp.error) throw duResp.error
+      const assigned = (duResp.data as any[]) || []
+      const assignedUserIds = Array.from(new Set(assigned.map((r) => String(r.user_id)).filter(Boolean)))
+      setAvailabilitySelectedUserIds(assignedUserIds.length ? assignedUserIds : acceptedUserIdsForSelectedPerformance)
+
+      const respResp = await supabase
+        .from('ampro_availability_responses')
+        .select('request_date_id,user_id,status,comment')
+        .in('request_date_id', dateIds)
+
+      if (respResp.error) throw respResp.error
+      const responses = (respResp.data as any[]) || []
+      const responseMap: Record<string, { status: string | null; comment: string | null }> = {}
+      for (const r of responses) {
+        const key = `${String(r.request_date_id)}:${String(r.user_id)}`
+        responseMap[key] = { status: (r as any)?.status ?? null, comment: (r as any)?.comment ?? null }
+      }
+
+      const overview = dates.map((d) => {
+        const day = String(d.day)
+        const usersForDate = assigned
+          .filter((a) => String(a.request_date_id) === String(d.id))
+          .map((a) => {
+            const uid = String(a.user_id)
+            const key = `${String(d.id)}:${uid}`
+            const rr = responseMap[key]
+            return { user_id: uid, status: rr?.status ?? null, comment: rr?.comment ?? null }
+          })
+
+        return { day, rows: usersForDate }
+      })
+
+      setAvailabilityOverview(overview)
+    } catch (e: any) {
+      showError(e?.message || 'Kon beschikbaarheid niet laden')
+    }
+  }
+
+  useEffect(() => {
+    if (active !== 'availability') return
+    if (!availabilityPerformanceId) return
+    loadAvailability(availabilityPerformanceId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, availabilityPerformanceId])
+
+  async function saveAvailabilityConfig() {
+    try {
+      if (!availabilityPerformanceId) throw new Error('Kies een programma')
+      setSavingAvailability(true)
+
+      const desiredDays = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
+      if (!desiredDays.length) throw new Error('Voeg minstens 1 datum toe')
+
+      const selectedUserIds = Array.from(new Set((availabilitySelectedUserIds || []).map(String).filter(Boolean)))
+      if (!selectedUserIds.length) throw new Error('Selecteer minstens 1 user')
+
+      const lockAt = availabilityLockAt.trim() ? parseFlexibleDateToISODate(availabilityLockAt.trim()) : null
+
+      // Ensure request exists
+      let requestId = availabilityRequestId
+      if (!requestId) {
+        const ins = await supabase
+          .from('ampro_availability_requests')
+          .insert({
+            performance_id: availabilityPerformanceId,
+            is_visible: availabilityVisible,
+            responses_locked: availabilityLocked,
+            responses_lock_at: lockAt,
+          })
+          .select('id')
+          .single()
+        if (ins.error) throw ins.error
+        requestId = String((ins.data as any)?.id || '')
+      } else {
+        const up = await supabase
+          .from('ampro_availability_requests')
+          .update({
+            is_visible: availabilityVisible,
+            responses_locked: availabilityLocked,
+            responses_lock_at: lockAt,
+          })
+          .eq('id', requestId)
+        if (up.error) throw up.error
+      }
+      if (!requestId) throw new Error('Kon request niet opslaan')
+      setAvailabilityRequestId(requestId)
+
+      const existingDatesResp = await supabase
+        .from('ampro_availability_request_dates')
+        .select('id,day')
+        .eq('request_id', requestId)
+      if (existingDatesResp.error) throw existingDatesResp.error
+
+      const existingDates = (existingDatesResp.data as any[]) || []
+      const existingByDay = new Map(existingDates.map((d) => [String(d.day), String(d.id)]))
+
+      const toDeleteIds = existingDates
+        .filter((d) => !desiredDays.includes(String(d.day)))
+        .map((d) => String(d.id))
+        .filter(Boolean)
+
+      if (toDeleteIds.length) {
+        const del = await supabase
+          .from('ampro_availability_request_dates')
+          .delete()
+          .in('id', toDeleteIds)
+        if (del.error) throw del.error
+      }
+
+      const toAddDays = desiredDays.filter((day) => !existingByDay.has(day))
+      if (toAddDays.length) {
+        const insDates = await supabase
+          .from('ampro_availability_request_dates')
+          .insert(toAddDays.map((day) => ({ request_id: requestId, day })))
+        if (insDates.error) throw insDates.error
+      }
+
+      // Reload dates to get all ids
+      const allDatesResp = await supabase
+        .from('ampro_availability_request_dates')
+        .select('id,day')
+        .eq('request_id', requestId)
+      if (allDatesResp.error) throw allDatesResp.error
+      const allDates = (allDatesResp.data as any[]) || []
+
+      // Apply the same selected users to every date.
+      for (const d of allDates) {
+        const dateId = String(d.id)
+        if (!dateId) continue
+        const delUsers = await supabase
+          .from('ampro_availability_request_date_users')
+          .delete()
+          .eq('request_date_id', dateId)
+        if (delUsers.error) throw delUsers.error
+
+        const insUsers = await supabase
+          .from('ampro_availability_request_date_users')
+          .insert(selectedUserIds.map((uid) => ({ request_date_id: dateId, user_id: uid })))
+        if (insUsers.error) throw insUsers.error
+      }
+
+      showSuccess('Beschikbaarheid opgeslagen')
+      await loadAvailability(availabilityPerformanceId)
+    } catch (e: any) {
+      showError(e?.message || 'Opslaan mislukt')
+    } finally {
+      setSavingAvailability(false)
+    }
+  }
 
   const [memberDetailOpen, setMemberDetailOpen] = useState(false)
   const [memberDetailApp, setMemberDetailApp] = useState<any | null>(null)
@@ -222,6 +469,12 @@ export default function AmproAdminPage() {
           .limit(200)
         if (appsResp.error) throw appsResp.error
 
+        const rosterResp = await supabase
+          .from('ampro_roster')
+          .select('performance_id,user_id,role_name,added_at')
+          .order('added_at', { ascending: false })
+        if (rosterResp.error) throw rosterResp.error
+
         const updatesResp = await supabase
           .from('ampro_updates')
           .select('id,performance_id,title,body,visibility,created_at,updated_at')
@@ -230,7 +483,10 @@ export default function AmproAdminPage() {
         if (updatesResp.error) throw updatesResp.error
 
         const userIds = Array.from(
-          new Set((appsResp.data || []).map((a: any) => String(a.user_id)).filter(Boolean)),
+          new Set(
+            [...(appsResp.data || []).map((a: any) => String(a.user_id)), ...(rosterResp.data || []).map((r: any) => String(r.user_id))]
+              .filter(Boolean),
+          ),
         )
 
         let profilesMap: Record<string, { first_name?: string | null; last_name?: string | null }> = {}
@@ -258,6 +514,7 @@ export default function AmproAdminPage() {
           setForms(formsResp.data || [])
           setFormIdByProgramId(linksMap)
           setApplications(appsResp.data || [])
+          setRoster(rosterResp.data || [])
           setUpdates(updatesResp.data || [])
           setProfilesByUserId(profilesMap)
           if (!newUpdatePerformanceId && (perfResp.data || []).length) {
@@ -318,6 +575,12 @@ export default function AmproAdminPage() {
       .limit(200)
     if (!appsResp.error) setApplications(appsResp.data || [])
 
+    const rosterResp = await supabase
+      .from('ampro_roster')
+      .select('performance_id,user_id,role_name,added_at')
+      .order('added_at', { ascending: false })
+    if (!rosterResp.error) setRoster(rosterResp.data || [])
+
     const updatesResp = await supabase
       .from('ampro_updates')
       .select('id,performance_id,title,body,visibility,created_at,updated_at')
@@ -325,7 +588,12 @@ export default function AmproAdminPage() {
       .limit(200)
     if (!updatesResp.error) setUpdates(updatesResp.data || [])
 
-    const userIds = Array.from(new Set((appsResp.data || []).map((a: any) => String(a.user_id)).filter(Boolean)))
+    const userIds = Array.from(
+      new Set(
+        [...(appsResp.data || []).map((a: any) => String(a.user_id)), ...(rosterResp.data || []).map((r: any) => String(r.user_id))]
+          .filter(Boolean),
+      ),
+    )
     if (userIds.length) {
       const profilesResp = await supabase
         .from('ampro_dancer_profiles')
@@ -552,8 +820,40 @@ export default function AmproAdminPage() {
 
   async function setStatus(appId: string, status: 'pending' | 'accepted' | 'rejected' | 'maybe') {
     try {
+      const fromState = (applications || []).find((a: any) => String(a?.id || '') === String(appId))
+      let performanceId = fromState ? String(fromState.performance_id || '') : ''
+      let userId = fromState ? String(fromState.user_id || '') : ''
+
+      if (!performanceId || !userId) {
+        const lookup = await supabase
+          .from('ampro_applications')
+          .select('performance_id,user_id')
+          .eq('id', appId)
+          .maybeSingle()
+        if (lookup.error) throw lookup.error
+        performanceId = lookup.data?.performance_id ? String((lookup.data as any).performance_id) : ''
+        userId = lookup.data?.user_id ? String((lookup.data as any).user_id) : ''
+      }
+
       const { error } = await supabase.from('ampro_applications').update({ status }).eq('id', appId)
       if (error) throw error
+
+      if (performanceId && userId) {
+        if (status === 'accepted') {
+          const upsertRoster = await supabase
+            .from('ampro_roster')
+            .upsert({ performance_id: performanceId, user_id: userId, role_name: null } as any)
+          if (upsertRoster.error) throw upsertRoster.error
+        } else {
+          const delRoster = await supabase
+            .from('ampro_roster')
+            .delete()
+            .eq('performance_id', performanceId)
+            .eq('user_id', userId)
+          if (delRoster.error) throw delRoster.error
+        }
+      }
+
       await refresh()
 
       showSuccess('Status aangepast')
@@ -651,6 +951,7 @@ export default function AmproAdminPage() {
     { key: 'programmas', label: "Programma's", icon: BookOpen },
     { key: 'forms', label: 'Forms', icon: FileText },
     { key: 'locations', label: 'Locaties', icon: MapPin },
+    { key: 'availability', label: 'Beschikbaarheid', icon: Calendar },
     { key: 'notes', label: 'Notes', icon: MessageSquare },
     { key: 'applications', label: 'Applicaties', icon: ClipboardList },
     { key: 'members', label: 'Members', icon: Users },
@@ -1627,6 +1928,155 @@ export default function AmproAdminPage() {
                   ) : null}
 
                   {updates.length === 0 ? <div className="text-sm text-slate-600">Nog geen notes.</div> : null}
+                </div>
+              </>
+            ) : null}
+
+            {active === 'availability' ? (
+              <>
+                <h1 className="text-2xl font-bold text-slate-900">Beschikbaarheid</h1>
+                <p className="mt-1 text-sm text-slate-600">Vraag beschikbaarheid op per programma en bekijk antwoorden.</p>
+
+                <div className="mt-6 grid gap-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                    <div className="grid gap-3">
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                        Programma
+                        <select
+                          value={availabilityPerformanceId}
+                          onChange={(e) => setAvailabilityPerformanceId(e.target.value)}
+                          className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        >
+                          {performances.map((p: any) => (
+                            <option key={String(p.id)} value={String(p.id)}>
+                              {String(p.title || p.id)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={availabilityVisible}
+                          onChange={(e) => setAvailabilityVisible(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                        Zichtbaar voor users
+                      </label>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={availabilityLocked}
+                            onChange={(e) => setAvailabilityLocked(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                          Vergrendeld (user kan niet aanpassen)
+                        </label>
+
+                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                          Vergrendel na datum (optioneel)
+                          <input
+                            value={availabilityLockAt}
+                            onChange={(e) => setAvailabilityLockAt(e.target.value)}
+                            placeholder="dd/mm/jjjj"
+                            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                          />
+                        </label>
+                      </div>
+
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                        Data (1 per lijn of komma)
+                        <textarea
+                          value={availabilityDatesText}
+                          onChange={(e) => setAvailabilityDatesText(e.target.value)}
+                          placeholder="dd/mm/jjjj"
+                          className="min-h-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </label>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="text-sm font-semibold text-slate-900">Users (accepted)</div>
+                        <div className="mt-3 grid gap-2">
+                          {acceptedUserIdsForSelectedPerformance.map((uid) => {
+                            const profile = profilesByUserId[String(uid)]
+                            const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(uid)
+                            const checked = availabilitySelectedUserIds.includes(String(uid))
+                            return (
+                              <label key={uid} className="flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const on = e.target.checked
+                                    setAvailabilitySelectedUserIds((prev) => {
+                                      const set = new Set(prev.map(String))
+                                      if (on) set.add(String(uid))
+                                      else set.delete(String(uid))
+                                      return Array.from(set)
+                                    })
+                                  }}
+                                  className="h-4 w-4 rounded border-slate-300"
+                                />
+                                <span className="truncate">{name}</span>
+                              </label>
+                            )
+                          })}
+                          {acceptedUserIdsForSelectedPerformance.length === 0 ? (
+                            <div className="text-sm text-slate-600">Nog geen accepted users in roster voor dit programma.</div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={saveAvailabilityConfig}
+                          disabled={savingAvailability}
+                          className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                            savingAvailability ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {savingAvailability ? 'Opslaan…' : 'Opslaan'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                    <div className="text-sm font-semibold text-slate-900">Overzicht</div>
+                    <div className="mt-4 grid gap-3">
+                      {availabilityRequestId ? (
+                        availabilityOverview.map((d) => (
+                          <div key={d.day} className="rounded-xl border border-slate-200 p-4">
+                            <div className="text-sm font-semibold text-slate-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                            <div className="mt-3 grid gap-2">
+                              {d.rows.map((r) => {
+                                const profile = profilesByUserId[String(r.user_id)]
+                                const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(r.user_id)
+                                return (
+                                  <div key={String(r.user_id)} className="rounded-lg border border-slate-200 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="text-sm font-semibold text-slate-900 truncate">{name}</div>
+                                      <div className="text-xs font-semibold text-slate-700">{availabilityStatusLabel(r.status)}</div>
+                                    </div>
+                                    {r.comment ? <div className="mt-1 text-xs text-slate-600 whitespace-pre-wrap">{r.comment}</div> : null}
+                                  </div>
+                                )
+                              })}
+                              {d.rows.length === 0 ? (
+                                <div className="text-sm text-slate-600">Geen users gekoppeld aan deze datum.</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-slate-600">Nog geen beschikbaarheidsvraag ingesteld.</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             ) : null}
