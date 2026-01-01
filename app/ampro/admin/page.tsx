@@ -820,7 +820,7 @@ export default function AmproAdminPage() {
                               </div>
 
                               <div className="mt-1 text-xs text-slate-600">
-                                {locationName ? `Locatie: ${locationName}` : null}
+                                {locationName ? `Location: ${locationName}` : null}
                                 {locationName && (p.region || p.performance_dates?.length || p.rehearsal_period_start || p.rehearsal_period_end || p.application_deadline)
                                   ? ' • '
                                   : null}
@@ -833,7 +833,7 @@ export default function AmproAdminPage() {
                                   ? ' • '
                                   : null}
                                 {p.rehearsal_period_start || p.rehearsal_period_end
-                                  ? `Repetitie: ${p.rehearsal_period_start ? formatDateOnlyFromISODate(p.rehearsal_period_start) : ''}${
+                                  ? `Rehearsals: ${p.rehearsal_period_start ? formatDateOnlyFromISODate(p.rehearsal_period_start) : ''}${
                                       p.rehearsal_period_start && p.rehearsal_period_end ? ' – ' : ''
                                     }${p.rehearsal_period_end ? formatDateOnlyFromISODate(p.rehearsal_period_end) : ''}`
                                   : null}

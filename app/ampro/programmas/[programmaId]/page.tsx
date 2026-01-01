@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ContentContainer from '@/components/ContentContainer'
 import { ArrowLeft, Calendar, MapPin } from 'lucide-react'
-import { formatDateOnlyFromISODate } from '@/lib/formatting'
+import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
 import { useNotification } from '@/contexts/NotificationContext'
 
 type Programma = {
@@ -91,6 +91,9 @@ export default function AmproProgrammaDetailPage() {
 
   const applyPath = `/ampro/programmas/${encodeURIComponent(programmaId)}/apply`
   const applyHref = isLoggedIn ? applyPath : `/ampro/login?next=${encodeURIComponent(applyPath)}`
+
+  const deadlinePassed = isISODatePast(programma?.application_deadline)
+  const isClosed = Boolean(programma && (!programma.applications_open || deadlinePassed))
 
   const performanceDatesLabel = (() => {
     const dates = programma?.performance_dates || []
@@ -200,7 +203,7 @@ export default function AmproProgrammaDetailPage() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-slate-600">Status</span>
                     <span className="text-lg font-bold text-slate-900">
-                      {programma.applications_open ? 'Open' : 'Gesloten'}
+                      {isClosed ? 'Closed' : 'Open'}
                     </span>
                   </div>
                   <div className="text-sm text-slate-500">
@@ -210,28 +213,9 @@ export default function AmproProgrammaDetailPage() {
                   </div>
                 </div>
 
-                {(programma.region || performanceDatesLabel) ? (
-                  <div className="mb-4 p-4 bg-white border border-slate-200 rounded-lg">
-                    <div className="space-y-2 text-sm text-slate-700">
-                      {programma.region ? (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-slate-400" />
-                          <span>{programma.region}</span>
-                        </div>
-                      ) : null}
-                      {performanceDatesLabel ? (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-slate-400" />
-                          <span>Data: {performanceDatesLabel}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-
                 <button
                   type="button"
-                  disabled={!programma.applications_open}
+                  disabled={isClosed}
                   onClick={() => router.push(applyHref)}
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

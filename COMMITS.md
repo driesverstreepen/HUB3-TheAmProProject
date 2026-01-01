@@ -190,5 +190,3 @@ Dit project demonstreert een systematische, professionele aanpak van web develop
 ---
 
 *Generated: 2025-10-28*
-*Repository: driesverstreepen/Flow-Manager*
-*Branch: copilot/setup-basic-structure-webapp*

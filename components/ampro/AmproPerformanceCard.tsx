@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Calendar, ChevronRight, MapPin } from 'lucide-react'
-import { formatDateOnlyFromISODate } from '@/lib/formatting'
+import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
 
 export type AmproPerformanceCardModel = {
   id: string
@@ -25,6 +25,9 @@ export default function AmproPerformanceCard({
   applyHref: string
 }) {
   const router = useRouter()
+
+  const deadlinePassed = isISODatePast(performance.application_deadline)
+  const isClosed = !performance.applications_open || deadlinePassed
 
   const performanceDatesLabel = (() => {
     const dates = performance.performance_dates || []
@@ -50,6 +53,12 @@ export default function AmproPerformanceCard({
         className="w-full bg-white rounded-2xl p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[180px] group hover:bg-slate-50"
       >
         <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-blue-500" />
+
+        {deadlinePassed ? (
+          <div className="absolute inset-0 rounded-2xl bg-slate-200/60 flex items-center justify-center pointer-events-none">
+            <div className="text-sm font-semibold text-slate-700">Applications closed</div>
+          </div>
+        ) : null}
 
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -89,11 +98,11 @@ export default function AmproPerformanceCard({
 
         <div className="mt-auto pt-4 flex items-end justify-between gap-4">
           <div className="text-xs text-slate-500">
-            Inschrijvingen: {performance.applications_open ? 'open' : 'gesloten'}
+            Inschrijvingen: {isClosed ? 'gesloten' : 'open'}
             {performance.application_deadline ? ` • Deadline: ${formatDateOnlyFromISODate(performance.application_deadline)}` : ''}
           </div>
 
-          {performance.applications_open ? (
+          {!isClosed ? (
             <button
               type="button"
               onClick={(e) => {

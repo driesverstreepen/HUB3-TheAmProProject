@@ -24,7 +24,16 @@ export default function AmproProfilePage() {
   const { showSuccess, showError } = useNotification()
   const [checking, setChecking] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [email, setEmail] = useState<string>('')
+  const [newEmail, setNewEmail] = useState<string>('')
+  const [updatingEmail, setUpdatingEmail] = useState(false)
+  const [newPassword, setNewPassword] = useState<string>('')
+  const [confirmPassword, setConfirmPassword] = useState<string>('')
+  const [updatingPassword, setUpdatingPassword] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [nextPath, setNextPath] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile>({
     first_name: null,
@@ -60,7 +69,11 @@ export default function AmproProfilePage() {
           return
         }
 
-        if (!cancelled) setEmail(user.email || '')
+        if (!cancelled) {
+          setUserId(user.id)
+          setEmail(user.email || '')
+          setNewEmail(user.email || '')
+        }
 
         const resp = await supabase
           .from('ampro_dancer_profiles')
@@ -135,6 +148,75 @@ export default function AmproProfilePage() {
       showError(e?.message || 'Opslaan mislukt')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function updateEmail() {
+    try {
+      setUpdatingEmail(true)
+      const nextEmail = newEmail.trim()
+      if (!nextEmail) throw new Error('Vul een geldig e-mailadres in')
+
+      const { error } = await supabase.auth.updateUser({ email: nextEmail })
+      if (error) throw error
+
+      showSuccess('E-mailadres update aangevraagd. Check je inbox om te bevestigen.')
+    } catch (e: any) {
+      showError(e?.message || 'E-mailadres wijzigen mislukt')
+    } finally {
+      setUpdatingEmail(false)
+    }
+  }
+
+  async function updatePassword() {
+    try {
+      setUpdatingPassword(true)
+      if (!newPassword) throw new Error('Vul een nieuw wachtwoord in')
+      if (newPassword !== confirmPassword) throw new Error('Wachtwoorden komen niet overeen')
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      if (error) throw error
+
+      setNewPassword('')
+      setConfirmPassword('')
+      showSuccess('Wachtwoord bijgewerkt')
+    } catch (e: any) {
+      showError(e?.message || 'Wachtwoord wijzigen mislukt')
+    } finally {
+      setUpdatingPassword(false)
+    }
+  }
+
+  async function deleteAccount() {
+    try {
+      if (!userId) throw new Error('Je bent niet ingelogd')
+      setDeleting(true)
+
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Account verwijderen mislukt')
+
+      await supabase.auth.signOut().catch(() => {})
+      router.replace('/ampro')
+
+      if (data?.warning) {
+        showSuccess('Account verwijderd. Let op: ' + data.warning)
+      } else if (data?.info) {
+        showSuccess('Account verwijderd. ' + data.info)
+      } else {
+        showSuccess('Account verwijderd')
+      }
+    } catch (e: any) {
+      showError(e?.message || 'Account verwijderen mislukt')
+    } finally {
+      setDeleting(false)
+      setShowDeleteModal(false)
+      setDeleteConfirmText('')
     }
   }
 
@@ -276,6 +358,140 @@ export default function AmproProfilePage() {
             </button>
           </div>
         </div>
+
+        {/* Danger Zone */}
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-red-200 p-8">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-red-900">Danger Zone</h2>
+              <p className="mt-1 text-sm text-slate-600">Wijzig je accountgegevens of verwijder je account permanent.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-6">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-semibold text-slate-900">E-mailadres wijzigen</div>
+              <div className="mt-3 grid gap-3">
+                <div className="grid gap-1 text-sm font-medium text-slate-700">
+                  Nieuw e-mailadres
+                  <input
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    inputMode="email"
+                    autoComplete="email"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={updateEmail}
+                  disabled={updatingEmail || !newEmail.trim()}
+                  className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    updatingEmail || !newEmail.trim()
+                      ? 'bg-slate-100 text-slate-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {updatingEmail ? 'Bijwerken…' : 'E-mailadres bijwerken'}
+                </button>
+                <div className="text-xs text-slate-600">Je kan een bevestigingsmail ontvangen om de wijziging af te ronden.</div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-semibold text-slate-900">Wachtwoord wijzigen</div>
+              <div className="mt-3 grid gap-3">
+                <div className="grid gap-1 text-sm font-medium text-slate-700">
+                  Nieuw wachtwoord
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="grid gap-1 text-sm font-medium text-slate-700">
+                  Bevestig nieuw wachtwoord
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={updatePassword}
+                  disabled={updatingPassword || !newPassword || !confirmPassword}
+                  className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    updatingPassword || !newPassword || !confirmPassword
+                      ? 'bg-slate-100 text-slate-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {updatingPassword ? 'Bijwerken…' : 'Wachtwoord bijwerken'}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-red-200 p-4">
+              <div className="text-sm font-semibold text-slate-900">Account verwijderen</div>
+              <p className="mt-1 text-sm text-slate-600">Dit verwijdert je account en gekoppelde data permanent. Dit kan niet ongedaan gemaakt worden.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(true)
+                  setDeleteConfirmText('')
+                }}
+                className="mt-4 h-11 rounded-lg px-4 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+              >
+                Account verwijderen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {showDeleteModal ? (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+              <div className="text-xl font-semibold text-slate-900">Account verwijderen</div>
+              <p className="mt-2 text-sm text-slate-600">Type <span className="font-semibold">DELETE</span> om te bevestigen.</p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="mt-4 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                placeholder="Type DELETE"
+              />
+              <div className="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className={`h-11 flex-1 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    deleting ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
+                  }`}
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteAccount}
+                  disabled={deleting || deleteConfirmText.trim().toLowerCase() !== 'delete'}
+                  className={`h-11 flex-1 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    deleting || deleteConfirmText.trim().toLowerCase() !== 'delete'
+                      ? 'bg-red-100 text-red-400'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  {deleting ? 'Verwijderen…' : 'Verwijderen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </ContentContainer>
     </div>
   )

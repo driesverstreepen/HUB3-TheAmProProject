@@ -21,7 +21,7 @@ Vercel is de aanbevolen hosting provider voor Next.js applicaties.
 
 ### Stap 3: Import Project
 
-1. Selecteer je GitHub repository: `driesverstreepen/Flow-Manager`
+1. Selecteer je GitHub repository: `driesverstreepen/HUB3-TheAmProProject`
 2. Vercel detecteert automatisch dat het een Next.js project is
 3. Klik op "Import"
 

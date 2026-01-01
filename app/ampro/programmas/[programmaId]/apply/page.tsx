@@ -6,11 +6,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { isAmproProfileComplete, parseAmproFormFields, type AmproFormField } from '@/lib/ampro'
 import { useNotification } from '@/contexts/NotificationContext'
+import { isISODatePast } from '@/lib/formatting'
 
 type Programma = {
   id: string
   title: string
   applications_open: boolean
+  application_deadline: string | null
 }
 
 type FormRow = {
@@ -136,7 +138,7 @@ export default function AmproProgrammaApplyPage() {
 
         const perfResp = await supabase
           .from('ampro_programmas')
-          .select('id,title,applications_open')
+          .select('id,title,applications_open,application_deadline')
           .eq('id', programmaId)
           .maybeSingle()
 
@@ -208,6 +210,10 @@ export default function AmproProgrammaApplyPage() {
       }
 
       if (!programma?.applications_open) {
+        throw new Error('Inschrijvingen zijn gesloten voor dit programma')
+      }
+
+      if (isISODatePast(programma?.application_deadline)) {
         throw new Error('Inschrijvingen zijn gesloten voor dit programma')
       }
 

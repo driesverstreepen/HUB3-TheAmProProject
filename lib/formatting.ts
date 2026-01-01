@@ -44,6 +44,27 @@ export function formatDateOnlyFromISODate(s?: string | null) {
   return formatDateOnly(v);
 }
 
+// Returns true when the current local date is strictly after the given ISO date-only string (YYYY-MM-DD).
+export function isISODatePast(s?: string | null, today: Date = new Date()) {
+  if (!s) return false;
+  const v = String(s);
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let targetNum: number | null = null;
+
+  if (m) {
+    targetNum = Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
+  } else {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+      targetNum = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    }
+  }
+
+  if (targetNum === null) return false;
+  const todayNum = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  return todayNum > targetNum;
+}
+
 export function formatTimeFromDate(s?: string) {
   if (!s) return "";
   const d = new Date(s);
@@ -97,5 +118,6 @@ export default {
   formatDateTimeISO,
   formatDateOnly,
   formatDateOnlyFromISODate,
+  isISODatePast,
   formatTimeFromDate,
 };
