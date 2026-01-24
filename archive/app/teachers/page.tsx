@@ -1,6 +1,6 @@
 import React from 'react'
 import ContentContainer from '@/components/ContentContainer'
-import { createSupabaseClient } from '../../lib/supabase'
+import { createSupabaseClient } from '@/lib/supabase'
 import TeacherList from '@/components/TeacherList'
 
 type ProfileRow = {

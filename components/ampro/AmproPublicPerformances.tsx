@@ -93,15 +93,15 @@ export default function AmproPublicPerformances({
   }, [items, userId])
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 border-b border-slate-700">
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-linear-to-br from-gray-900 via-blue-900 to-gray-900 border-b border-gray-700">
         <ContentContainer className="py-8">
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1 min-w-0">
               <h1 className="text-4xl font-extrabold text-white! mb-2">{title}</h1>
-              <p className="text-slate-200 text-lg mb-4">{renderSubtitle(subtitle)}</p>
+              <p className="text-gray-200 text-lg mb-4">{renderSubtitle(subtitle)}</p>
               {showIntro ? (
-                <div className="text-slate-200 text-sm">
+                <div className="text-gray-200 text-sm">
                   Bekijk de programma’s en schrijf je in als danser.
                 </div>
               ) : null}
@@ -112,13 +112,13 @@ export default function AmproPublicPerformances({
 
       <ContentContainer className="py-12">
 
-        {loading ? <div className="mt-6 text-sm text-slate-600">Laden…</div> : null}
+        {loading ? <div className="mt-6 text-sm text-gray-600">Laden…</div> : null}
         {error ? <div className="mt-6 text-sm text-red-600">{error}</div> : null}
 
         {!loading && !error && items.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <div className="text-xl font-semibold text-slate-900 mb-2">Nog geen programma’s</div>
-            <p className="text-slate-600">Kom later terug.</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <div className="text-xl font-semibold text-gray-900 mb-2">Nog geen programma’s</div>
+            <p className="text-gray-600">Kom later terug.</p>
           </div>
         ) : null}
 

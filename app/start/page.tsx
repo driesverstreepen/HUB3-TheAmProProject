@@ -31,11 +31,6 @@ export default function StartPage() {
           </ContentContainer>
         </div>
       </div>
-
-      {/* Embed the AmPro public profile / performances below the hero */}
-      <div className="bg-slate-50 text-slate-900">
-        <AmproPublicPerformances title="The AmProProject" subtitle="Bekijk de programma's" showIntro={false} />
-      </div>
     </div>
   )
 }

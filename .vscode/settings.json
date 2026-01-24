@@ -22,6 +22,11 @@
     "editor.defaultFormatter": "denoland.vscode-deno"
   },
   "chat.tools.terminal.autoApprove": {
-    "tasklist": true
+    "tasklist": true,
+    "Test-Path": true,
+    "New-Item": true,
+    "Out-Null": true,
+    "Move-Item": true,
+    "ForEach-Object": true
   }
 }

@@ -348,134 +348,6 @@ body.dark .no-gradient {
   border: 1px solid rgba(255,255,255,0.02) !important;
 }
 
-/* ---- Typography labels (global, configurable via super-admin) ---- */
-/* Use :where() so Tailwind utility classes can still override when needed. */
-:where(.t-display) {
-  font-size: var(--typo-display-size);
-  line-height: 1.1;
-  color: var(--typo-display-color);
-}
-
-:where(.t-h1) {
-  font-size: var(--typo-h1-size);
-  line-height: 1.15;
-  color: var(--typo-h1-color);
-}
-
-:where(.t-h2) {
-  font-size: var(--typo-h2-size);
-  line-height: 1.2;
-  color: var(--typo-h2-color);
-}
-
-:where(.t-h3) {
-  font-size: var(--typo-h3-size);
-  line-height: 1.25;
-  color: var(--typo-h3-color);
-}
-
-:where(.t-h4) {
-  font-size: var(--typo-h4-size);
-  line-height: 1.25;
-  color: var(--typo-h4-color);
-}
-
-:where(.t-subtitle) {
-  font-size: var(--typo-subtitle-size);
-  line-height: 1.35;
-  color: var(--typo-subtitle-color);
-}
-
-:where(.t-body) {
-  font-size: var(--typo-body-size);
-  line-height: 1.5;
-  color: var(--typo-body-color);
-}
-
-:where(.t-bodySm) {
-  font-size: var(--typo-bodySm-size);
-  line-height: 1.45;
-  color: var(--typo-bodySm-color);
-}
-
-:where(.t-caption) {
-  font-size: var(--typo-caption-size);
-  line-height: 1.35;
-  color: var(--typo-caption-color);
-}
-
-:where(.t-label) {
-  font-size: var(--typo-label-size);
-  line-height: 1.25;
-  color: var(--typo-label-color);
-}
-
-:where(.t-button) {
-  font-size: var(--typo-button-size);
-  line-height: 1.25;
-  color: var(--typo-button-color);
-}
-
-:where(.t-noColor) {
-  /* Don't force a color from typography tokens.
-     Important: no !important here, so explicit Tailwind `text-*` utilities can still win. */
-  color: inherit;
-}
-
-/* ---- Marketing typography labels (welcome/landing pages) ----
-   These intentionally control ONLY size/line-height so marketing pages can
-   deviate from the app typography without affecting token-driven colors.
-   Use Tailwind `text-*` utilities (or default inheritance) for color. */
-:where(.m-heroTitle) {
-  font-size: clamp(2.75rem, 5vw, 3.75rem); /* ~text-5xl → ~text-6xl */
-  line-height: 1.05;
-}
-
-:where(.m-heroSubtitle) {
-  font-size: clamp(1.125rem, 2.2vw, 1.5rem); /* ~text-lg → ~text-2xl */
-  line-height: 1.35;
-}
-
-:where(.m-sectionTitle) {
-  font-size: clamp(1.875rem, 3.2vw, 2.25rem); /* ~text-3xl → ~text-4xl */
-  line-height: 1.15;
-}
-
-:where(.m-cardTitle) {
-  font-size: 1.4rem; /* ~text-xl */
-  line-height: 1.25;
-}
-
-:where(.m-kpi) {
-  font-size: 1.5rem; /* ~text-2xl */
-  line-height: 1.15;
-}
-
-:where(.m-bodyLg) {
-  font-size: 1.2rem; /* ~text-lg */
-  line-height: 1.6;
-}
-
-:where(.m-body) {
-  font-size: 1rem; /* base */
-  line-height: 1.6;
-}
-
-:where(.m-bodySm) {
-  font-size: 0.875rem; /* ~text-sm */
-  line-height: 1.4;
-}
-
-:where(.m-caption) {
-  font-size: 0.8rem; /* ~text-xs */
-  line-height: 1.35;
-}
-
-:where(.m-button) {
-  font-size: 1.1rem; /* ~text-base */
-  line-height: 1.25;
-}
-
 /* Prominent action button - shared layout utility
    Use this class together with color-specific gradient classes
    (e.g. `bg-linear-to-r from-blue-500 to-blue-600`) so only the
@@ -487,7 +359,7 @@ body.dark .no-gradient {
   justify-content: center;
   gap: 0.5rem; /* similar to Tailwind `gap-2` */
   padding: 0.5rem 1rem; /* `py-2 px-4` */
-  border-radius: 0.5rem; /* `rounded-lg` */
+  border-radius: 1.5rem; /* `rounded-lg` */
   font-size: 0.875rem; /* `text-sm` */
   font-weight: 600; /* `font-semibold` */
   color: #ffffff; /* default white text */
