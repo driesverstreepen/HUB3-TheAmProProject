@@ -227,7 +227,7 @@ export default function AmproProgrammaDetailPage() {
 
             <div>
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 sticky top-6">
-                <h3 className="font-semibold text-slate-900 mb-4">Inschrijven</h3>
+                <h3 className="text-xl font-bold text-slate-900 mb-4">Inschrijven</h3>
 
                 <div className="mb-4 p-4 bg-slate-50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">

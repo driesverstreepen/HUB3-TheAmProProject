@@ -14,6 +14,19 @@ export default function AmproPublicPerformances({
   subtitle?: string
   showIntro?: boolean
 }) {
+  const renderSubtitle = (text: string) => {
+    // Highlight any occurrence of "HUB3" with extra bold styling
+    const parts = text.split(/(HUB3)/g)
+    return parts.map((part, i) =>
+      part === 'HUB3' ? (
+        <span key={i} className="font-extrabold">
+          {part}
+        </span>
+      ) : (
+        <span key={i}>{part}</span>
+      ),
+    )
+  }
   const [items, setItems] = useState<AmproPerformanceCardModel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,7 +99,7 @@ export default function AmproPublicPerformances({
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1 min-w-0">
               <h1 className="text-4xl font-extrabold text-white! mb-2">{title}</h1>
-              <p className="text-slate-200 text-lg mb-4">{subtitle}</p>
+              <p className="text-slate-200 text-lg mb-4">{renderSubtitle(subtitle)}</p>
               {showIntro ? (
                 <div className="text-slate-200 text-sm">
                   Bekijk de programma’s en schrijf je in als danser.

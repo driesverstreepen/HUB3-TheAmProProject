@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import WelcomePage from './WelcomePage'
+import StartPage from './start/page'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { safeSelect } from '@/lib/supabaseHelpers'
 
@@ -12,6 +12,7 @@ export default function Page() {
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
+  const [showWelcomeFromQuery, setShowWelcomeFromQuery] = useState(false)
   const { theme } = useTheme()
 
   const withTimeout = async <T,>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> => {
@@ -68,6 +69,20 @@ export default function Page() {
     }
 
     checkSession()
+  }, [])
+
+  // Decide whether to show the existing WelcomePage (so its modals open)
+  // when the URL explicitly contains login/signup query params.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const login = params.get('login')
+      const signup = params.get('signup')
+      if (login === 'true' || signup) setShowWelcomeFromQuery(true)
+    } catch {
+      // ignore
+    }
   }, [])
 
   // Register redirect effect before any early return to keep hooks order stable
@@ -268,5 +283,5 @@ export default function Page() {
     )
   }
 
-  return <WelcomePage />
+  return <StartPage />
 }

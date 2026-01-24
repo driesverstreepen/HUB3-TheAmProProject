@@ -17,15 +17,14 @@ export async function proxy(request: NextRequest) {
     );
   };
 
-  // AmPro-only workspace: only allow /ampro and /api/ampro.
+  // AmPro-only workspace historically only allowed /ampro routes.
+  // Permit the public landing pages at `/` and `/start` so unauthenticated
+  // visitors can reach the new start/welcome flow.
   if (!isPublicAsset(String(pathname))) {
-    if (pathname === "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/ampro";
-      return NextResponse.redirect(url);
-    }
-
-    if (!(pathname.startsWith("/ampro") || pathname.startsWith("/api/ampro"))) {
+    // Allow root and /start to pass through to the app
+    if (pathname === "/" || pathname === "/start") {
+      // continue to normal handling
+    } else if (!(pathname.startsWith("/ampro") || pathname.startsWith("/api/ampro"))) {
       if (pathname.startsWith("/api")) {
         return new NextResponse("Not Found", { status: 404 });
       }

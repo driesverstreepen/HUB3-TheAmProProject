@@ -1,83 +1,11 @@
 "use client"
 
-import React from 'react'
-import { Building2, ArrowRight, Check, CheckCircle, Sparkles, Calendar, DollarSign, Users, BarChart3, FileText, Clock, Mail, Lock, User, Shield, Zap, TrendingUp } from 'lucide-react'
-import { FeatureCard } from '@/components/FeatureCard'
-import { PublicNavigation } from '@/components/PublicNavigation'
-import Link from 'next/link'
-import { PublicAuthModals } from '@/components/public/PublicAuthModals'
-
+// Studio welcome page removed — keep a minimal placeholder so imports
+// referencing this file do not break the build. The component renders
+// nothing to effectively remove the page from the app.
 export default function StudioWelcomePage() {
-  return (
-    <PublicAuthModals defaultSignupMode="studio">
-      {({ openLogin, openSignupStudio }) => (
-        <div className="min-h-screen bg-slate-50 overflow-x-hidden">
-          <PublicNavigation onLogin={openLogin} onSignup={openSignupStudio} />
-
-      {/* Hero Section */}
-      <div className="relative bg-linear-to-br from-blue-600 via-indigo-700 to-purple-800 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top_left,var(--tw-gradient-stops))] from-white to-transparent"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 backdrop-blur-sm bg-white/10 px-4 py-2 rounded-full border border-white/20 mb-6">
-              <Sparkles className="w-4 h-4" />
-              <span className="m-caption font-medium text-white">De complete studio management oplossing</span>
-            </div>
-
-            <h1 className="m-heroTitle font-bold mb-6 leading-tight !text-white">
-              Laat je studio groeien met HUB3
-            </h1>
-
-            <p className="m-heroSubtitle text-slate-100 mb-8 max-w-3xl mx-auto leading-relaxed">
-              Alles wat je nodig hebt om je dansstudio professioneel te beheren. <br className="hidden md:block" />
-              Van planning en betalingen tot analytics en groei.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link 
-                href="/auth/registreer?signup=studio" 
-                className="m-button group px-8 py-4 bg-white text-blue-600 rounded-xl hover:bg-blue-50 font-semibold transition-all shadow-xl hover:shadow-2xl hover:scale-105 flex items-center gap-2"
-              >
-                Start 14 dagen gratis trial
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-
-              <a 
-                href="#pricing" 
-                className="m-button group px-8 py-4 bg-transparent text-white border-2 border-white/40 rounded-xl hover:bg-white/10 font-semibold transition-all shadow-xl hover:shadow-2xl flex items-center gap-2"
-              >
-                Bekijk prijzen
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </a>
-            </div>
-
-            <p className="m-bodySm mt-6 text-slate-200">
-              💳 Geen creditcard nodig voor trial
-            </p>
-          </div>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-linear-to-t from-slate-50 to-transparent"></div>
-      </div>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        {/* Benefits Overview */}
-        <section className="mb-24">
-          <div className="text-center mb-16">
-            <h2 className="m-sectionTitle font-bold text-slate-900 mb-4">Waarom kiezen studio's voor HUB3?</h2>
-            <p className="m-bodyLg text-slate-600 max-w-2xl mx-auto">
-              Bespaar tijd, verhoog efficiency en laat je studio groeien met de tools die je nodig hebt
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200 text-center hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 bg-linear-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <Clock className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="m-cardTitle font-bold text-slate-900 mb-3">Bespaar 10+ uur per week</h3>
-              <p className="m-body text-slate-600">
-                Automatiseer administratie, planning en communicatie. Besteed je tijd aan wat echt belangrijk is: lesgeven.
-              </p>
+  return null
+}
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200 text-center hover:shadow-xl transition-shadow">

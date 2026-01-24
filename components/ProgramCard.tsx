@@ -139,28 +139,11 @@ export default function ProgramCard({ program, showCapacity, showDescription = t
     tabIndex={onOpen ? 0 : undefined}
     onClick={onOpen}
     onKeyDown={handleKey}
-    className={`w-full bg-white rounded-2xl p-3 sm:p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[160px] sm:min-h-[200px] ${onOpen ? 'cursor-pointer' : ''} group`}
-  >
-    {/* Always-visible color indicator stripe (rounded to match card corners) */}
-    <span aria-hidden="true" className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${accentBgClass}`} />
-    {/* Linked trial indicator: larger circle overlapping the top-right rounded corner */}
-    {hasVisibleLinkedTrial && (
-      <div className="absolute -top-2 -right-2 z-50">
-        <span
-          aria-hidden="true"
-          className="inline-block w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-500 shadow-md"
-        />
-        <div className="pointer-events-none absolute -top-10 right-0 mb-2 w-max opacity-0 scale-95 transform transition-all duration-150 group-hover:opacity-100 group-hover:scale-105 z-50">
-          <div className="bg-white border border-slate-100 rounded-lg px-3 py-2 t-bodySm font-medium shadow-md">
-            Bevat proefles
-          </div>
-        </div>
-      </div>
-    )}
+    className={`w-full bg-white rounded-3xl p-3 sm:p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[160px] sm:min-h-[200px] ${onOpen ? 'cursor-pointer' : ''} group`}>
       <div className="flex justify-between items-start mb-2 sm:mb-3">
         <div className={`flex-1 min-w-0 ${onOpen ? 'pr-10' : ''}`}>
           <div className="flex items-start gap-2 mb-1 min-w-0">
-            <h3 className="t-h3 font-semibold min-w-0 truncate">{program.title}</h3>
+            <h3 className="t-h3 font-bold min-w-0 truncate">{program.title}</h3>
             {status && (
               <span className={`inline-flex items-center px-2 py-1 rounded-full t-caption font-semibold ${status.toLowerCase().startsWith('actief') ? 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-200' : 'bg-slate-100 text-slate-800 dark:bg-slate-900/60 dark:text-slate-200'}`}>
                 {status}
