@@ -79,7 +79,7 @@ export async function autoSyncProgramToStripe(
       return { success: false, error: productError.message }
     }
 
-    // Create price if provided and > 0
+    // Create price if provided and > 0 — store price fields on stripe_products (single-price model)
     if (price && price > 0) {
       const stripePrice = await createStripePrice(
         stripeProduct.id,
@@ -92,15 +92,16 @@ export async function autoSyncProgramToStripe(
       console.log(`[Auto-sync] Created Stripe price ${stripePrice.id} for product ${stripeProduct.id}`)
 
       await supabase
-        .from('stripe_prices')
-        .insert({
-          stripe_product_id: savedProduct.id,
+        .from('stripe_products')
+        .update({
           stripe_price_id: stripePrice.id,
-          amount: Math.round(price * 100),
-          currency: 'eur',
-          interval: null,
-          active: true
+          price_amount: Math.round(price * 100),
+          price_currency: 'eur',
+          price_interval: null,
+          price_active: true,
+          updated_at: new Date().toISOString(),
         })
+        .eq('id', savedProduct.id)
     }
 
     return { success: true }

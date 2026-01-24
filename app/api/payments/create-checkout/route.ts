@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Get program details
     const { data: program, error: programError } = await supabase
       .from("programs")
-      .select("*, stripe_products(*, stripe_prices(*))")
+      .select("*, stripe_products(*)")
       .eq("id", program_id)
       .single();
 
@@ -108,9 +108,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get first active price
-    const stripePrice = stripeProduct.stripe_prices?.find((p: any) => p.active);
-    if (!stripePrice) {
+    // Get price fields from merged product
+    const stripePriceActive = stripeProduct.price_active;
+    const stripePriceAmount = stripeProduct.price_amount;
+    const stripePriceId = stripeProduct.stripe_price_id;
+    const stripePriceCurrency = stripeProduct.price_currency || 'eur';
+
+    if (!stripePriceActive || !stripePriceId || !stripePriceAmount) {
       return NextResponse.json({
         error: "No price configured for this program",
       }, { status: 400 });
@@ -147,7 +151,7 @@ export async function POST(request: NextRequest) {
     const platformFeePercent = platformConfig?.platform_fee_percent || 10;
 
     // Calculate platform fee amount
-    const totalAmount = stripePrice.amount;
+    const totalAmount = stripePriceAmount;
     const platformFeeAmount = Math.round(
       (totalAmount * platformFeePercent) / 100,
     );
@@ -212,7 +216,7 @@ export async function POST(request: NextRequest) {
         amount: totalAmount,
         platform_fee: platformFeeAmount,
         net_amount: totalAmount - platformFeeAmount,
-        currency: stripePrice.currency,
+        currency: stripePriceCurrency,
         status: "pending",
         description: `Payment for ${program.titel}`,
         metadata: {

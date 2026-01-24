@@ -30,6 +30,151 @@ export async function POST(request: Request) {
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
+    // Handle product and price lifecycle events: upsert into stripe_products / stripe_prices
+    if (event.type && (event.type.startsWith('product.') || event.type.startsWith('price.'))) {
+      try {
+        const obj: any = event.data?.object;
+
+        // product.* events
+        if (event.type.startsWith('product.')) {
+          const stripeProductId = obj?.id;
+          const name = obj?.name || null;
+          const description = obj?.description || null;
+          const active = typeof obj?.active === 'boolean' ? obj.active : true;
+
+          // Try to resolve studio via connected account id (event.account)
+          const stripeAccountId = (event as any).account || obj?.livemode === false ? undefined : (event as any).account;
+          let studioId: string | null = null;
+
+          if (stripeAccountId) {
+            const { data: sa } = await serviceClient
+              .from('studio_stripe_accounts')
+              .select('studio_id')
+              .eq('stripe_account_id', stripeAccountId)
+              .maybeSingle();
+            studioId = sa?.studio_id || null;
+          }
+
+          // Fallback: if product already exists locally, reuse its studio_id
+          if (!studioId) {
+            const { data: existing } = await serviceClient
+              .from('stripe_products')
+              .select('studio_id, stripe_account_id, id')
+              .eq('stripe_product_id', stripeProductId)
+              .maybeSingle();
+            if (existing) {
+              studioId = existing.studio_id || null;
+            }
+          }
+
+          if (!studioId) {
+            console.warn('[Stripe Webhook] product event: could not determine studio for product', stripeProductId);
+          } else {
+            const { data: existing } = await serviceClient
+              .from('stripe_products')
+              .select('*')
+              .eq('stripe_product_id', stripeProductId)
+              .maybeSingle();
+
+            if (existing) {
+              await serviceClient.from('stripe_products').update({
+                name,
+                description,
+                active,
+                stripe_account_id: stripeAccountId || existing.stripe_account_id,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existing.id);
+              // If the product has a default price attached, try to update price fields
+              try {
+                const defaultPriceId = obj?.default_price && typeof obj.default_price === 'string'
+                  ? obj.default_price
+                  : null;
+                if (defaultPriceId) {
+                  const priceObj: any = await stripe.prices.retrieve(defaultPriceId, stripeAccountId ? { stripeAccount: stripeAccountId } : undefined);
+                  await serviceClient.from('stripe_products').update({
+                    stripe_price_id: priceObj.id || null,
+                    price_amount: typeof priceObj.unit_amount === 'number' ? priceObj.unit_amount : null,
+                    price_currency: priceObj.currency || 'eur',
+                    price_interval: priceObj.recurring?.interval || null,
+                    price_active: typeof priceObj.active === 'boolean' ? priceObj.active : true,
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', existing.id);
+                } else if (obj?.default_price_data) {
+                  const pd: any = obj.default_price_data;
+                  await serviceClient.from('stripe_products').update({
+                    stripe_price_id: pd.id || null,
+                    price_amount: typeof pd.unit_amount === 'number' ? pd.unit_amount : null,
+                    price_currency: pd.currency || 'eur',
+                    price_interval: pd.recurring?.interval || null,
+                    price_active: typeof pd.active === 'boolean' ? pd.active : true,
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', existing.id);
+                }
+              } catch (e) {
+                console.warn('[Stripe Webhook] failed to fetch default price for product', stripeProductId, e);
+              }
+            } else {
+              const insertPayload: any = {
+                studio_id: studioId,
+                stripe_product_id: stripeProductId,
+                stripe_account_id: stripeAccountId || null,
+                name,
+                description,
+                active,
+              };
+
+              // include default price data when present
+              if (obj?.default_price_data) {
+                const pd: any = obj.default_price_data;
+                insertPayload.stripe_price_id = pd.id || null;
+                insertPayload.price_amount = typeof pd.unit_amount === 'number' ? pd.unit_amount : null;
+                insertPayload.price_currency = pd.currency || 'eur';
+                insertPayload.price_interval = pd.recurring?.interval || null;
+                insertPayload.price_active = typeof pd.active === 'boolean' ? pd.active : true;
+              }
+
+              const { error: insErr } = await serviceClient.from('stripe_products').insert(insertPayload);
+              if (insErr) console.warn('[Stripe Webhook] insert product returned error', insErr);
+            }
+          }
+        }
+
+        // price.* events — update price fields on the product row (single-price model)
+        if (event.type.startsWith('price.')) {
+          const price = obj;
+          const stripePriceId = price?.id;
+          const stripeProductRef = typeof price?.product === 'string' ? price.product : price?.product?.id;
+          const amount = typeof price?.unit_amount === 'number' ? price.unit_amount : (price?.unit_amount || null);
+          const currency = price?.currency || 'eur';
+          const interval = price?.recurring?.interval || null;
+          const active = typeof price?.active === 'boolean' ? price.active : true;
+
+          // Resolve local product row first
+          const { data: prodRow } = await serviceClient
+            .from('stripe_products')
+            .select('*')
+            .eq('stripe_product_id', stripeProductRef)
+            .maybeSingle();
+
+          if (!prodRow) {
+            console.warn('[Stripe Webhook] price event: missing local product for', stripeProductRef);
+          } else {
+            // Update product with price fields
+            await serviceClient.from('stripe_products').update({
+              stripe_price_id: stripePriceId || prodRow.stripe_price_id || null,
+              price_amount: amount,
+              price_currency: currency,
+              price_interval: interval,
+              price_active: active,
+              updated_at: new Date().toISOString(),
+            }).eq('id', prodRow.id);
+          }
+        }
+      } catch (e) {
+        console.error('[Stripe Webhook] Error syncing product/price:', e);
+      }
+    }
+
     // Handle checkout.session.completed
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as any;

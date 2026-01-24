@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       throw productDbError
     }
 
-    // Create Stripe price if amount provided
+    // Create Stripe price if amount provided — store price fields on the product row
     let savedPrice = null
     if (price_amount && price_amount > 0) {
       const interval = price_type === 'subscription_monthly' ? 'month' : 
@@ -123,25 +123,29 @@ export async function POST(request: NextRequest) {
         stripeAccount.stripe_account_id
       )
 
-      // Save price to database
-      const { data: priceData, error: priceDbError } = await supabase
-        .from('stripe_prices')
-        .insert({
-          stripe_product_id: savedProduct.id,
+      // Update product with price fields
+      const { error: priceDbError } = await supabase
+        .from('stripe_products')
+        .update({
+          stripe_price_id: stripePrice.id,
+          price_amount: Math.round(price_amount * 100),
+          price_currency: currency,
+          price_interval: interval || null,
+          price_active: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', savedProduct.id)
+
+      if (priceDbError) {
+        console.error('Database error saving price on product:', priceDbError)
+      } else {
+        savedPrice = {
           stripe_price_id: stripePrice.id,
           amount: Math.round(price_amount * 100),
           currency,
           interval: interval || null,
-          active: true
-        })
-        .select()
-        .single()
-
-      if (priceDbError) {
-        console.error('Database error saving price:', priceDbError)
-        // Continue even if price save fails
-      } else {
-        savedPrice = priceData
+          active: true,
+        }
       }
     }
 
@@ -191,7 +195,7 @@ export async function GET(request: NextRequest) {
     // Get product and prices
     const { data: product, error: productError } = await supabase
       .from('stripe_products')
-      .select('*, stripe_prices(*)')
+      .select('*')
       .eq('program_id', program_id)
       .single()
 

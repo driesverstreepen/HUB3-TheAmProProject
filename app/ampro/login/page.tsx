@@ -50,7 +50,7 @@ export default function AmproLoginPage() {
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-md px-6 py-12">
         <h1 className="text-2xl font-bold text-slate-900">Login</h1>
-        <p className="mt-1 text-sm text-slate-600">Voor dansers van The AmProProject.</p>
+        <p className="mt-1 text-sm text-slate-600">Log in om toegang te krijgen tot inschrijven.</p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-3">
           <label className="grid gap-1 text-sm font-medium text-slate-700">

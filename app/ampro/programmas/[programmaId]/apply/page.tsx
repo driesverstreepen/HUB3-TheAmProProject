@@ -48,14 +48,14 @@ function FieldInput({
   value: any
   onChange: (value: any) => void
 }) {
-  const common = 'h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm'
+  const common = 'h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm'
 
   if (field.type === 'textarea') {
     return (
       <textarea
         value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+        className="min-h-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
         placeholder={field.placeholder}
         required={Boolean(field.required)}
       />
@@ -82,12 +82,12 @@ function FieldInput({
 
   if (field.type === 'checkbox') {
     return (
-      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
         <input
           type="checkbox"
           checked={Boolean(value)}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300"
+          className="h-4 w-4 rounded border-gray-300"
         />
         <span>{field.label}</span>
       </label>
@@ -307,20 +307,20 @@ export default function AmproProgrammaApplyPage() {
     return (
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-2xl px-6 py-12">
-          <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-slate-900">
+          <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
             ← Terug
           </Link>
 
-          <h1 className="mt-6 text-2xl font-bold text-slate-900">Profiel onvolledig</h1>
-          <p className="mt-2 text-sm text-slate-600">
+          <h1 className="mt-6 text-2xl font-bold text-gray-900">Profiel onvolledig</h1>
+          <p className="mt-2 text-sm text-gray-600">
             Voor je kan inschrijven, moeten je voornaam, achternaam, geboortedatum en adresgegevens ingevuld zijn.
           </p>
 
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
             <button
               type="button"
               onClick={() => router.push(`/ampro/profile?next=${encodeURIComponent(nextPath)}`)}
-              className="h-11 rounded-lg px-4 text-sm font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
+              className="h-11 rounded-3xl px-4 text-sm font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
             >
               Ga naar mijn profiel
             </button>
@@ -334,27 +334,27 @@ export default function AmproProgrammaApplyPage() {
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-2xl px-6 py-12">
         <div className="flex items-center justify-between gap-4">
-          <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-slate-900">
+          <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
             ← Terug
           </Link>
         </div>
 
-        <h1 className="mt-6 text-2xl font-bold text-slate-900">Inschrijven</h1>
-        {programma ? <p className="mt-1 text-sm text-slate-600">Voor: {programma.title}</p> : null}
+        <h1 className="mt-6 text-2xl font-bold text-gray-900">Inschrijven</h1>
+        {programma ? <p className="mt-1 text-md text-gray-700">Voor: {programma.title}</p> : null}
 
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
-          <div className="text-sm font-semibold text-slate-900">Formulier</div>
-          <div className="mt-1 text-sm text-slate-600">{form?.name || 'Standaard inschrijving'}</div>
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+          <div className="text-sm font-semibold text-gray-900">Formulier</div>
+          <div className="mt-1 text-sm text-gray-600">{form?.name || 'Standaard inschrijving'}</div>
 
           <div className="mt-6 grid gap-4">
             {fields.length === 0 ? (
-              <div className="text-sm text-slate-700">Nog geen form fields ingesteld. (Admin kan dit straks beheren.)</div>
+              <div className="text-sm text-gray-700">Nog geen form fields ingesteld.</div>
             ) : null}
 
             {fields.map((field) => {
               if (field.type === 'checkbox') {
                 return (
-                  <div key={field.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div key={field.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                     <FieldInput
                       field={field}
                       value={answers[field.key]}
@@ -365,7 +365,7 @@ export default function AmproProgrammaApplyPage() {
               }
 
               return (
-                <label key={field.key} className="grid gap-1 text-sm font-medium text-slate-700">
+                <label key={field.key} className="grid gap-1 rounded-2xl text-sm font-medium text-gray-700">
                   {field.label}
                   <FieldInput
                     field={field}
@@ -379,7 +379,7 @@ export default function AmproProgrammaApplyPage() {
             <button
               onClick={submit}
               disabled={saving}
-              className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+              className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                 saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >

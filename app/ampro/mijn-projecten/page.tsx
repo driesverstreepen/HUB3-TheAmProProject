@@ -101,50 +101,50 @@ export default function AmproMijnProjectenPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mijn projecten</h1>
-          <p className="mt-1 text-sm text-slate-600">Projecten waarvoor je hebt geapplied en waarvoor je bent geaccepteerd.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Mijn Projecten</h1>
+          <p className="mt-1 text-sm text-gray-600">Projecten waarvoor je hebt geapplied en waarvoor je bent geaccepteerd.</p>
         </div>
 
         {error ? <div className="mt-6 text-sm text-red-600">{error}</div> : null}
 
         <div className="mt-8 grid gap-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <div className="text-sm font-semibold text-slate-900">Geaccepteerd</div>
+          <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
+            <div className="text-md font-bold text-gray-700">Geaccepteerd</div>
             <div className="mt-4 grid gap-2">
               {acceptedPrograms.map((p) => (
                 <Link
                   key={p.performance_id}
                   href={`/ampro/mijn-projecten/${encodeURIComponent(p.performance_id)}`}
-                  className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50"
+                  className="block rounded-3xl border border-gray-200 px-4 py-3 hover:bg-gray-50"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 truncate">{p.title}</div>
-                      {p.role_name ? <div className="mt-1 text-xs text-slate-600">Rol: {p.role_name}</div> : null}
+                      <div className="text-sm font-semibold text-gray-700 truncate">{p.title}</div>
+                      {p.role_name ? <div className="mt-1 text-xs text-gray-600">Rol: {p.role_name}</div> : null}
                     </div>
-                    <div className="text-xs font-semibold text-slate-900">Bekijk</div>
+                    <div className="text-xs font-semibold text-gray-700 hover:text-gray-900">Bekijk</div>
                   </div>
                 </Link>
               ))}
-              {acceptedPrograms.length === 0 ? <div className="text-sm text-slate-600">Nog niets geaccepteerd.</div> : null}
+              {acceptedPrograms.length === 0 ? <div className="text-sm text-gray-600">Nog niets geaccepteerd.</div> : null}
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <div className="text-sm font-semibold text-slate-900">Mijn inschrijvingen</div>
-            <p className="mt-1 text-sm text-slate-600">Status van je applications.</p>
+          <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
+            <div className="text-md font-bold text-gray-700">Mijn inschrijvingen</div>
+            <p className="mt-1 text-sm text-gray-600">Status van je applications.</p>
 
             <div className="mt-4 grid gap-2">
               {applied.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-3 py-2">
-                  <div className="text-sm text-slate-700">{a.performance?.title || ''}</div>
-                  <div className="text-xs font-semibold text-slate-900">{getUserStatusLabel(a.status)}</div>
+                <div key={a.id} className="flex items-center justify-between gap-4 rounded-3xl border border-gray-200 px-3 py-2">
+                  <div className="text-sm font-semibold text-gray-700">{a.performance?.title || ''}</div>
+                  <div className="text-xs font-semibold text-gray-900">{getUserStatusLabel(a.status)}</div>
                 </div>
               ))}
-              {applications.length === 0 ? <div className="text-sm text-slate-600">Nog geen inschrijvingen.</div> : null}
+              {applications.length === 0 ? <div className="text-sm text-gray-600">Nog geen inschrijvingen.</div> : null}
             </div>
           </div>
         </div>

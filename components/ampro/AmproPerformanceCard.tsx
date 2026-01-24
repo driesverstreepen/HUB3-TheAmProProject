@@ -50,9 +50,8 @@ export default function AmproPerformanceCard({
     <div className="h-full">
       <Link
         href={`/ampro/programmas/${encodeURIComponent(performance.id)}`}
-        className="w-full bg-white rounded-3xl p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[180px] group hover:bg-gray-50"
+        className="w-full bg-white rounded-3xl p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[180px] group hover:bg-gray-50 border-l-4 border-blue-600"
       >
-        {/* color accent removed */}
 
         {deadlinePassed ? (
           <div className="absolute inset-0 rounded-3xl bg-gray-200/60 flex items-center justify-center pointer-events-none">

@@ -70,6 +70,7 @@ export default function AmproMijnProjectenDetailPage() {
   const [programma, setProgramma] = useState<Programma | null>(null)
   const [location, setLocation] = useState<LocationRow | null>(null)
   const [notes, setNotes] = useState<NoteRow[]>([])
+  const [creatingCheckout, setCreatingCheckout] = useState(false)
 
   const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
@@ -139,6 +140,23 @@ export default function AmproMijnProjectenDetailPage() {
 
         if (notesResp.error) throw notesResp.error
 
+        // Fetch Stripe product/price separately — there is no DB FK relationship
+        // between `ampro_programmas` and `stripe_products` in the schema cache.
+        let stripeProducts: any[] = []
+        try {
+          // Match either platform `program_id` (platform programs) or
+          // `ampro_program_id` (AmPro program rows) — some products may be
+          // linked to ampro_programmas.
+          const spResp = await supabase
+            .from('stripe_products')
+            .select('*')
+            .or(`program_id.eq.${performanceId},ampro_program_id.eq.${performanceId}`)
+
+          if (!spResp.error && spResp.data) stripeProducts = spResp.data as any
+        } catch (err) {
+          // ignore — optional feature
+        }
+
         // Availability request (RLS allows:
         // - assigned + visible, OR
         // - assigned + already responded, so users can re-consult later)
@@ -204,6 +222,8 @@ export default function AmproMijnProjectenDetailPage() {
           setAvailabilityDates(dates)
           setAvailabilityDraft(draft)
           setHasAnyAvailabilityResponse(anyResponse)
+          // Attach fetched stripe products to programa for UI use
+          ;(setProgramma as any)((prev: any) => ({ ...(perfResp.data || {}), stripe_products: stripeProducts }))
         }
       } catch (e: any) {
         if (!cancelled) showError(e?.message || 'Kon programma niet laden')
@@ -240,6 +260,44 @@ export default function AmproMijnProjectenDetailPage() {
   })()
 
   const infoHasAny = Boolean(location || performanceDatesLabel || rehearsalLabel)
+
+  const stripeProduct = (programma as any)?.stripe_products?.[0]
+  const priceLabel = stripeProduct && stripeProduct.price_active && stripeProduct.price_amount
+    ? `${(stripeProduct.price_amount / 100).toFixed(2)} ${String(stripeProduct.price_currency || '').toUpperCase()}`
+    : null
+
+  async function handleCheckout() {
+    try {
+      if (!programma?.id) return
+      setCreatingCheckout(true)
+
+      const res = await fetch('/api/payments/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ program_id: programa.id }),
+        credentials: 'same-origin',
+      })
+
+      const data = await res.json()
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || 'Kon checkout sessie niet aanmaken')
+      }
+
+      // Redirect browser to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url
+      } else if (data.session_id) {
+        // Fallback: open stripe hosted URL via session id if provided
+        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`
+      } else {
+        throw new Error('Geen checkout URL ontvangen')
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Betalen mislukt')
+    } finally {
+      setCreatingCheckout(false)
+    }
+  }
 
   const availabilityLocked = Boolean(
     availabilityRequest &&

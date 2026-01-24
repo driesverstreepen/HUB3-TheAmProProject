@@ -143,32 +143,32 @@ export default function AmproProgrammaDetailPage() {
   })()
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gray-50">
       <ContentContainer className="py-8">
         <button
           type="button"
           onClick={() => router.push('/ampro/programmas')}
-          className="mb-6 inline-flex items-center gap-2 text-slate-600 hover:text-slate-900"
+          className="mb-6 inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-5 w-5" />
           Terug naar programma’s
         </button>
 
-        {loading ? <div className="mt-6 text-sm text-slate-600">Laden…</div> : null}
+        {loading ? <div className="mt-6 text-sm text-gray-600">Laden…</div> : null}
         {programma ? (
           <div className="grid grid-cols-1 md:grid-cols-[1fr,360px] gap-6">
             <div className="space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                <div className="flex items-start justify-between mb-4 gap-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">
-                    <h1 className="text-4xl font-bold text-slate-900 mb-3">{programma.title}</h1>
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">{programma.title}</h1>
 
-                    <div className="mb-4 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
                         {typeLabel}
                       </span>
                       {programma.region ? (
-                        <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                        <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           {programma.region}
                         </span>
                       ) : null}
@@ -179,37 +179,37 @@ export default function AmproProgrammaDetailPage() {
               </div>
 
               {infoHasAny ? (
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                  <h2 className="text-xl font-bold text-slate-900 mb-4">Informatie</h2>
-                  <div className="grid gap-3 text-sm text-slate-700">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
+                  <div className="grid gap-3 text-sm text-gray-700">
                     {location ? (
                       <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
+                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
                         <div className="grid gap-1">
                           <div>
-                            <span className="text-slate-900">Locatie:</span> {location.name}
+                            <span className="text-gray-900">Locatie:</span> {location.name}
                           </div>
                           {location.address ? (
-                            <div className="text-xs text-slate-600 whitespace-pre-wrap">{location.address}</div>
+                            <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
                           ) : null}
                         </div>
                       </div>
                     ) : null}
                     {rehearsalLabel ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <Calendar className="h-4 w-4 text-gray-400" />
                         <span>Repetitie periode: {rehearsalLabel}</span>
                       </div>
                     ) : null}
                     {performanceDatesLabel ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <Calendar className="h-4 w-4 text-gray-400" />
                         <span>Voorstellingsdata: {performanceDatesLabel}</span>
                       </div>
                     ) : null}
                     {programma.application_deadline ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <Calendar className="h-4 w-4 text-gray-400" />
                         <span>Deadline: {formatDateOnlyFromISODate(programma.application_deadline)}</span>
                       </div>
                     ) : null}
@@ -218,25 +218,25 @@ export default function AmproProgrammaDetailPage() {
               ) : null}
 
               {programma.description ? (
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                  <h2 className="text-xl font-bold text-slate-900 mb-4">Beschrijving</h2>
-                  <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Beschrijving</h2>
+                  <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
                 </div>
               ) : null}
             </div>
 
             <div>
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 sticky top-6">
-                <h3 className="text-xl font-bold text-slate-900 mb-4">Inschrijven</h3>
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 sticky top-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Inschrijven</h3>
 
-                <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                <div className="mb-4 p-4 bg-blue-50 border border-gray-200 rounded-3xl">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-slate-600">Status</span>
-                    <span className="text-lg font-bold text-slate-900">
+                    <span className="font-semibold text-gray-600">Status</span>
+                    <span className="flex items-center pr-4 text-xl font-bold text-gray-900">
                       {isClosed ? 'Closed' : 'Open'}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-sm text-gray-500">
                     {programma.application_deadline
                       ? `Deadline: ${formatDateOnlyFromISODate(programma.application_deadline)}`
                       : 'Geen deadline ingesteld'}
@@ -247,13 +247,13 @@ export default function AmproProgrammaDetailPage() {
                   type="button"
                   disabled={isClosed}
                   onClick={() => router.push(applyHref)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-3xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Inschrijven
                 </button>
 
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <div className="text-sm text-slate-600 space-y-2">
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600 space-y-2">
                     <p>✓ Inschrijven via formulier</p>
                     <p>✓ Beoordeling door de company</p>
                   </div>

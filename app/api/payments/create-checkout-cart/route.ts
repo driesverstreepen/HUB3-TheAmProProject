@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     // Fetch programs with stripe product/price mapping
     const { data: programs } = await supabase
       .from("programs")
-      .select("id, titel, stripe_products(*, stripe_prices(*))")
+      .select("id, titel, stripe_products(*)")
       .in("id", programIds);
 
     // Build line_items by finding active stripe_price for each program
@@ -143,17 +143,16 @@ export async function POST(request: Request) {
           error: `Program ${program?.id} not configured for payments`,
         }, { status: 400 });
       }
-      const stripePrice = stripeProduct.stripe_prices?.find((p: any) =>
-        p.active
-      );
-      if (!stripePrice) {
+      const stripePriceActive = stripeProduct.price_active;
+      const stripePriceId = stripeProduct.stripe_price_id;
+      if (!stripePriceActive || !stripePriceId) {
         return NextResponse.json({
           error: `No active price for program ${program?.id}`,
         }, { status: 400 });
       }
 
       line_items.push({
-        price: stripePrice.stripe_price_id,
+        price: stripePriceId,
         quantity: 1,
       });
     }
