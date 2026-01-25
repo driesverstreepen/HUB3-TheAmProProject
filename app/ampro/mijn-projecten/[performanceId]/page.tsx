@@ -83,7 +83,7 @@ export default function AmproMijnProjectenDetailPage() {
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
   const [availabilityDraft, setAvailabilityDraft] = useState<Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }>>({})
   const [savingAvailability, setSavingAvailability] = useState(false)
-  const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponse] = useState(false)
+  const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponseState] = useState<boolean>(false)
   const [isAssignedToRequest, setIsAssignedToRequest] = useState(false)
   const [availabilityOpen, setAvailabilityOpen] = useState(true)
 
@@ -222,9 +222,7 @@ export default function AmproMijnProjectenDetailPage() {
           // availabilityRequest is set earlier when the server API returns data
           setAvailabilityDates(dates)
           setAvailabilityDraft(draft)
-          setHasAnyAvailabilityResponse(anyResponse)
-          // Attach programa data (admin_payment_url expected on program row)
-          (setProgramma as any)((prev: any) => ({ ...(perfResp.data || {}) }))
+          setHasAnyAvailabilityResponseState(anyResponse)
         }
       } catch (e: any) {
         if (!cancelled) showError(e?.message || 'Kon programma niet laden')
@@ -273,36 +271,8 @@ export default function AmproMijnProjectenDetailPage() {
       if (!programma?.id) return
       setCreatingCheckout(true)
 
-      const res = await fetch('/api/payments/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ampro_program_id: programma.id }),
-        credentials: 'same-origin',
-      })
-      const text = await res.text()
-      let data: any = null
-      try {
-        data = text ? JSON.parse(text) : null
-      } catch (e) {
-        // not JSON
-      }
-
-      if (!res.ok) {
-        const msg = (data && data.error) || text || `Request failed (${res.status})`
-        throw new Error(msg)
-      }
-
-      if (data?.error) throw new Error(data.error)
-
-      // Redirect browser to Stripe Checkout
-      if (data?.url) {
-        window.location.href = data.url
-      } else if (data?.session_id) {
-        // Fallback: open stripe hosted URL via session id if provided
-        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`
-      } else {
-        throw new Error('Geen checkout URL ontvangen')
-      }
+      if (!adminPaymentUrl) throw new Error('Geen betaallink beschikbaar voor dit programma')
+      window.location.href = String(adminPaymentUrl)
     } catch (err: any) {
       showError(err?.message || 'Betalen mislukt')
     } finally {
@@ -359,7 +329,7 @@ export default function AmproMijnProjectenDetailPage() {
       showSuccess('Beschikbaarheid opgeslagen')
       // Immediately reflect that the user has submitted availability so the
       // notification updates without a page refresh.
-      setHasAnyAvailabilityResponse(true)
+      setHasAnyAvailabilityResponseState(true)
     } catch (e: any) {
       showError(e?.message || 'Opslaan mislukt')
     } finally {

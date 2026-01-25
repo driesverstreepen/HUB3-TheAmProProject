@@ -23,6 +23,7 @@ interface ProgramWithDetails extends Program {
   workshop_details?: WorkshopDetails;
   locations?: Location[];
   teacher_ids?: string[];
+  admin_payment_url?: string | null;
   linked_trial_program_id?: string | null;
   linked_trial_program_title?: string | null;
 }
@@ -66,6 +67,7 @@ export default function ProgramsPage() {
     max_age: '',
     is_public: true,
     accepts_payment: false, // Default gratis
+    admin_payment_url: '',
     is_trial: false,
     linked_form_id: '',
     linked_trial_program_id: '',

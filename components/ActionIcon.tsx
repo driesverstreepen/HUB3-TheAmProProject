@@ -14,7 +14,7 @@ interface ActionIconProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 export default function ActionIcon({ icon: Icon, children, size = 18, variant = 'muted', className = '', title, ...rest }: ActionIconProps) {
   const variantClass =
     variant === 'danger'
-      ? 'text-red-600 hover:text-red-700'
+      ? 'text-gray-500 hover:text-red-600'
       : variant === 'primary'
       ? 'text-gray-600 hover:text-blue-600'
       : 'text-gray-500 hover:text-blue-600';

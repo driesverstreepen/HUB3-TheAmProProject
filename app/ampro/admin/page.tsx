@@ -9,6 +9,7 @@ import { isAmproAdmin, parseAmproFormFields, type AmproFormField } from '@/lib/a
 import { useNotification } from '@/contexts/NotificationContext'
 import { formatDateOnlyFromISODate } from '@/lib/formatting'
 import SearchFilterBar from '@/components/SearchFilterBar'
+import Select from '@/components/Select'
 import Modal from '@/components/Modal'
 import ActionIcon from '@/components/ActionIcon'
 
@@ -379,6 +380,9 @@ export default function AmproAdminPage() {
   const [memberDeleteConfirm, setMemberDeleteConfirm] = useState('')
 
   const [programmaSearch, setProgrammaSearch] = useState('')
+  const [memberFilterPerformanceId, setMemberFilterPerformanceId] = useState('')
+  const [memberFilterStatus, setMemberFilterStatus] = useState<'all' | 'pending' | 'accepted' | 'rejected' | 'maybe'>('all')
+  const [memberFilterPaid, setMemberFilterPaid] = useState<'all' | 'paid' | 'unpaid'>('all')
   const [programmaModalOpen, setProgrammaModalOpen] = useState(false)
   const [editingProgrammaId, setEditingProgrammaId] = useState<string | null>(null)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
@@ -398,7 +402,10 @@ export default function AmproAdminPage() {
   const [newPerformanceDates, setNewPerformanceDates] = useState('')
   const [newIsPublic, setNewIsPublic] = useState(true)
   const [newApplicationsOpen, setNewApplicationsOpen] = useState(true)
+  const [newPrice, setNewPrice] = useState('')
+  const [newAdminPaymentUrl, setNewAdminPaymentUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savingPaid, setSavingPaid] = useState(false)
 
   const [newFormName, setNewFormName] = useState('')
   const [newFormFields, setNewFormFields] = useState<FormFieldDraft[]>([])
@@ -468,7 +475,7 @@ export default function AmproAdminPage() {
 
         const appsResp = await supabase
           .from('ampro_applications')
-          .select('id,performance_id,user_id,status,submitted_at,answers_json,snapshot_json')
+          .select('id,performance_id,user_id,status,submitted_at,answers_json,snapshot_json,paid,payment_received_at')
           .order('submitted_at', { ascending: false })
           .limit(200)
         if (appsResp.error) throw appsResp.error
@@ -542,7 +549,7 @@ export default function AmproAdminPage() {
     const perfResp = await supabase
       .from('ampro_programmas')
       .select(
-        'id,title,description,program_type,is_public,applications_open,application_deadline,created_at,rehearsal_period_start,rehearsal_period_end,performance_dates,region,location_id',
+        'id,title,description,program_type,is_public,applications_open,application_deadline,created_at,rehearsal_period_start,rehearsal_period_end,performance_dates,region,location_id,price,admin_payment_url',
       )
       .order('created_at', { ascending: false })
     if (!perfResp.error) setPerformances(perfResp.data || [])
@@ -574,7 +581,7 @@ export default function AmproAdminPage() {
 
     const appsResp = await supabase
       .from('ampro_applications')
-      .select('id,performance_id,user_id,status,submitted_at,answers_json,snapshot_json')
+      .select('id,performance_id,user_id,status,submitted_at,answers_json,snapshot_json,paid,payment_received_at')
       .order('submitted_at', { ascending: false })
       .limit(200)
     if (!appsResp.error) setApplications(appsResp.data || [])
@@ -635,6 +642,8 @@ export default function AmproAdminPage() {
     setNewProgramType('performance')
     setNewIsPublic(true)
     setNewApplicationsOpen(true)
+    setNewPrice('')
+    setNewAdminPaymentUrl('')
     setProgrammaModalOpen(true)
   }
 
@@ -663,6 +672,27 @@ export default function AmproAdminPage() {
     }
   }
 
+  async function toggleMemberPaid() {
+    if (!memberDetailApp?.id) return
+    try {
+      setSavingPaid(true)
+      const currentlyPaid = Boolean((memberDetailApp as any)?.paid)
+      const updates: any = { paid: !currentlyPaid }
+      updates.payment_received_at = !currentlyPaid ? new Date().toISOString() : null
+
+      const { error } = await supabase.from('ampro_applications').update(updates).eq('id', memberDetailApp.id)
+      if (error) throw error
+      showSuccess('Betaalstatus bijgewerkt')
+      setMemberDetailOpen(false)
+      setMemberDetailApp(null)
+      await refresh()
+    } catch (e: any) {
+      showError(e?.message || 'Kon betaalstatus niet bijwerken')
+    } finally {
+      setSavingPaid(false)
+    }
+  }
+
   function openEditProgrammaModal(p: any) {
     setEditingProgrammaId(String(p?.id || ''))
     setNewLocationId(p?.location_id ? String(p.location_id) : '')
@@ -681,6 +711,8 @@ export default function AmproAdminPage() {
     setNewProgramType(t === 'workshop' ? 'workshop' : 'performance')
     setNewIsPublic(Boolean(p?.is_public))
     setNewApplicationsOpen(Boolean(p?.applications_open))
+    setNewPrice(p?.price != null ? String(p.price / 100) : '')
+    setNewAdminPaymentUrl(p?.admin_payment_url || '')
     setProgrammaModalOpen(true)
   }
 
@@ -708,6 +740,8 @@ export default function AmproAdminPage() {
         rehearsal_period_start: rehearsalStart,
         rehearsal_period_end: rehearsalEnd,
         performance_dates,
+        price: newPrice ? Math.round(Number(parseFloat(newPrice) * 100)) : null,
+        admin_payment_url: newAdminPaymentUrl || null,
       }
 
       const id = editingProgrammaId
@@ -1101,6 +1135,14 @@ export default function AmproAdminPage() {
     return !performances.some((p) => String(p?.id || '') === pid)
   })
 
+  const filteredMembers = (applications || []).filter((a: any) => {
+    if (memberFilterPerformanceId && String(a.performance_id) !== String(memberFilterPerformanceId)) return false
+    if (memberFilterStatus !== 'all' && String(a.status) !== String(memberFilterStatus)) return false
+    if (memberFilterPaid === 'paid' && !a.paid) return false
+    if (memberFilterPaid === 'unpaid' && a.paid) return false
+    return true
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
@@ -1174,7 +1216,7 @@ export default function AmproAdminPage() {
               <h2 className="text-xl font-bold text-gray-900">{editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}</h2>
               <p className="mt-1 text-sm text-gray-600">Vul de velden in.</p>
 
-              <div className="mt-6 grid gap-3">
+              <div className="mt-6 grid gap-4">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Type programma
                   <select
@@ -1222,6 +1264,32 @@ export default function AmproAdminPage() {
                     className="min-h-28 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
+                    Prijs (€)
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newPrice}
+                      onChange={(e) => setNewPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
+                    Betaal URL (optioneel)
+                    <input
+                      type="text"
+                      value={newAdminPaymentUrl}
+                      onChange={(e) => setNewAdminPaymentUrl(e.target.value)}
+                      placeholder="https://voorbeeld.nl/betaal/123"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
@@ -1763,6 +1831,24 @@ export default function AmproAdminPage() {
                           <div className="text-sm font-semibold text-gray-900">{name}</div>
                           <div className="mt-1 text-sm text-gray-600">Voorstelling: {perfTitle}</div>
                           <div className="mt-1 text-xs text-gray-500">Status: {String(memberDetailApp.status || '')}</div>
+                          <div className="mt-2 flex items-center gap-3">
+                            {((memberDetailApp as any)?.paid) ? (
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Betaald</span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Onbetaald</span>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={toggleMemberPaid}
+                              disabled={savingPaid}
+                              className={`h-8 rounded-3xl px-3 text-sm font-semibold transition-colors ${
+                                savingPaid ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                              }`}
+                            >
+                              {savingPaid ? 'Verwerken…' : ((memberDetailApp as any)?.paid ? 'Markeer onbetaald' : 'Markeer betaald')}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="rounded-3xl border border-gray-200 bg-white p-4">
@@ -2469,6 +2555,53 @@ export default function AmproAdminPage() {
                 <p className="mt-1 text-sm text-gray-600">Overzicht van alle inschrijvingen per voorstelling.</p>
 
                 <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Voorstelling</div>
+                      <Select value={memberFilterPerformanceId} onChange={(e) => setMemberFilterPerformanceId(e.target.value)}>
+                        <option value="">Alle voorstellingen</option>
+                        {performances.map((p) => (
+                          <option key={p.id} value={p.id}>{String(p.title || p.id)}</option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Status</div>
+                      <Select value={memberFilterStatus} onChange={(e) => setMemberFilterStatus(e.target.value as any)}>
+                        <option value="all">Alle statussen</option>
+                        <option value="pending">Pending</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="maybe">Maybe</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Betaalstatus</div>
+                      <Select value={memberFilterPaid} onChange={(e) => setMemberFilterPaid(e.target.value as any)}>
+                        <option value="all">Alle</option>
+                        <option value="paid">Betaald</option>
+                        <option value="unpaid">Onbetaald</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-transparent mb-1">&nbsp;</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMemberFilterPerformanceId('')
+                          setMemberFilterStatus('all')
+                          setMemberFilterPaid('all')
+                        }}
+                        className="h-11 w-full rounded-3xl bg-gray-50 border border-gray-200 px-4 text-sm text-gray-700"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
@@ -2476,11 +2609,12 @@ export default function AmproAdminPage() {
                           <th className="py-2 pr-4">Danser</th>
                           <th className="py-2 pr-4">Voorstelling</th>
                           <th className="py-2 pr-4">Status</th>
+                          <th className="py-2 pr-4">Betaalstatus</th>
                           <th className="py-2 pr-4"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {applications.map((a) => {
+                        {filteredMembers.map((a) => {
                           const userId = String(a.user_id)
                           const profile = profilesByUserId[userId]
                           const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
@@ -2491,6 +2625,13 @@ export default function AmproAdminPage() {
                               <td className="py-3 pr-4 font-semibold text-gray-900">{name}</td>
                               <td className="py-3 pr-4">{perfTitle}</td>
                               <td className="py-3 pr-4">{String(a.status)}</td>
+                              <td className="py-3 pr-4">
+                                {a.paid ? (
+                                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Betaald</span>
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Onbetaald</span>
+                                )}
+                              </td>
                               <td className="py-3 pr-4">
                                 <div className="flex items-center justify-end gap-2">
                                   <ActionIcon
@@ -2511,9 +2652,9 @@ export default function AmproAdminPage() {
                             </tr>
                           )
                         })}
-                        {applications.length === 0 ? (
+                        {filteredMembers.length === 0 ? (
                           <tr>
-                            <td className="py-4 text-gray-600" colSpan={4}>
+                            <td className="py-4 text-gray-600" colSpan={5}>
                               Nog geen members.
                             </td>
                           </tr>

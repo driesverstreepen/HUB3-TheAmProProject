@@ -10,6 +10,8 @@ type AppRow = {
   id: string
   status: string
   submitted_at: string
+  paid?: boolean | null
+  payment_received_at?: string | null
   performance?: { id: string; title: string } | null
 }
 
@@ -17,7 +19,7 @@ type RosterRow = {
   performance_id: string
   role_name: string | null
   added_at: string
-  performance?: { id: string; title: string } | null
+  performance?: { id: string; title: string; admin_payment_url?: string | null; price?: number | null } | null
 }
 
 function getUserStatusLabel(status: string): string {
@@ -53,14 +55,14 @@ export default function AmproMijnProjectenPage() {
 
         const appsResp = await supabase
           .from('ampro_applications')
-          .select('id,status,submitted_at,performance:ampro_programmas(id,title)')
+          .select('id,status,submitted_at,paid,payment_received_at,performance:ampro_programmas(id,title,admin_payment_url,price)')
           .order('submitted_at', { ascending: false })
 
         if (appsResp.error) throw appsResp.error
 
         const rosterResp = await supabase
           .from('ampro_roster')
-          .select('performance_id,role_name,added_at,performance:ampro_programmas(id,title)')
+          .select('performance_id,role_name,added_at,performance:ampro_programmas(id,title,admin_payment_url,price)')
           .order('added_at', { ascending: false })
 
         if (rosterResp.error) throw rosterResp.error
@@ -84,7 +86,13 @@ export default function AmproMijnProjectenPage() {
   const applied = useMemo(() => applications.filter((a) => a.status !== 'accepted'), [applications])
   const acceptedPrograms = useMemo(() => {
     const seen = new Set<string>()
-    const out: Array<{ performance_id: string; title: string; role_name: string | null }> = []
+    const out: Array<{
+      performance_id: string
+      title: string
+      role_name: string | null
+      admin_payment_url: string | null
+      price: number | null
+    }> = []
     for (const r of roster) {
       const pid = String(r.performance_id || '')
       if (!pid) continue
@@ -94,46 +102,34 @@ export default function AmproMijnProjectenPage() {
         performance_id: pid,
         title: String(r.performance?.title || pid),
         role_name: r.role_name ?? null,
+        admin_payment_url: (r.performance as any)?.admin_payment_url || null,
+        price: typeof (r.performance as any)?.price === 'number' ? (r.performance as any).price : null,
       })
     }
     return out
   }, [roster])
 
-  const payablePrograms = useMemo(() => [], [acceptedPrograms])
+  const payablePrograms = useMemo(() => {
+    return acceptedPrograms.filter((p) => {
+      const app = applications.find(
+        (a) =>
+          String((a.performance as any)?.id || '') === p.performance_id &&
+          String(a.status || '').toLowerCase() === 'accepted'
+      )
+
+      const isPaid = Boolean((app as any)?.paid)
+      return !isPaid && Boolean(p.admin_payment_url)
+    })
+  }, [acceptedPrograms, applications])
 
   // Removed stripe_products fetch — admin_payment_url on programs/ampro_programmas is used instead.
 
-  async function handleCheckout(programId: string) {
+  async function handleCheckout(programId: string, paymentUrl: string | null) {
     try {
       setCheckoutLoading((s) => ({ ...s, [programId]: true }))
 
-      const res = await fetch('/api/payments/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ program_id: programId }),
-        credentials: 'same-origin',
-      })
-
-      const text = await res.text()
-      let data: any = null
-      try {
-        data = text ? JSON.parse(text) : null
-      } catch (e) {
-        // not JSON
-      }
-
-      if (!res.ok) {
-        const msg = (data && data.error) || text || `Request failed (${res.status})`
-        throw new Error(msg)
-      }
-
-      if (data?.error) throw new Error(data.error)
-
-      if (data?.url) {
-        window.location.href = data.url
-      } else {
-        throw new Error('Geen checkout URL ontvangen')
-      }
+      if (!paymentUrl) throw new Error('Geen betaallink beschikbaar voor dit programma')
+      window.location.href = paymentUrl
     } catch (err: any) {
       setError(err?.message || 'Betalen mislukt')
     } finally {
@@ -187,10 +183,15 @@ export default function AmproMijnProjectenPage() {
               <div className="mt-4 grid gap-2">
                 {payablePrograms.map((p) => (
                   <div key={p.performance_id} className="flex items-center justify-between gap-4 rounded-3xl border border-gray-200 px-3 py-2">
-                    <div className="text-sm font-semibold text-gray-700 truncate">{p.title}</div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-700 truncate">{p.title}</div>
+                      {typeof p.price === 'number' ? (
+                        <div className="mt-0.5 text-xs text-gray-600">{(p.price / 100).toFixed(2)} EUR</div>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handleCheckout(p.performance_id)}
+                      onClick={() => handleCheckout(p.performance_id, p.admin_payment_url)}
                       disabled={Boolean(checkoutLoading[p.performance_id])}
                       className={`h-9 rounded-3xl px-3 text-sm font-semibold transition-colors ${
                         checkoutLoading[p.performance_id]
