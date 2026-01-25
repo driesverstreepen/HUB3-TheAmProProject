@@ -144,7 +144,7 @@ export default function AmproMijnProjectenDetailPage() {
         }
 
         const notesResp = await supabase
-          .from('ampro_updates')
+          .from('ampro_notes')
           .select('id,title,body,created_at')
           .eq('performance_id', performanceId)
           .order('created_at', { ascending: false })

@@ -142,6 +142,8 @@ export default function AmproAdminPage() {
   const [inviteManageLoading, setInviteManageLoading] = useState(false)
   const [inviteConfigMaxUses, setInviteConfigMaxUses] = useState<string>('')
   const [inviteConfigExpiresAt, setInviteConfigExpiresAt] = useState<string>('')
+  const [inviteDeleteArmed, setInviteDeleteArmed] = useState(false)
+  const [inviteDeleteConfirmText, setInviteDeleteConfirmText] = useState('')
   const [inviteManageStatus, setInviteManageStatus] = useState<
     | null
     | {
@@ -193,6 +195,8 @@ export default function AmproAdminPage() {
       setInviteManageStatus(null)
       setInviteConfigMaxUses('')
       setInviteConfigExpiresAt('')
+      setInviteDeleteArmed(false)
+      setInviteDeleteConfirmText('')
       setInviteManageOpen(true)
       setInviteManageLoading(true)
 
@@ -305,6 +309,8 @@ export default function AmproAdminPage() {
 
       // Keep the last URL visible for audit/reference, but status will flip to inactive.
       if (tokenBefore) await refreshInviteStatus(String(tokenBefore))
+      setInviteDeleteArmed(false)
+      setInviteDeleteConfirmText('')
       showSuccess(`Link gedeactiveerd (${Number(json?.revoked_count || 0)})`)
     } catch (e: any) {
       showError(e?.message || 'Deactiveren mislukt')
@@ -317,8 +323,18 @@ export default function AmproAdminPage() {
     const pid = String(inviteManageProgram?.id || '')
     if (!pid) return
 
-    const confirm = window.prompt('Typ DELETE om alle invite links voor dit programma te verwijderen:')
-    if (confirm !== 'DELETE') return
+    // Step 1: arm delete (no modal/prompt)
+    if (!inviteDeleteArmed) {
+      setInviteDeleteArmed(true)
+      setInviteDeleteConfirmText('')
+      return
+    }
+
+    // Step 2: require explicit text confirmation
+    if (inviteDeleteConfirmText.trim() !== 'DELETE') {
+      showError('Typ DELETE om te bevestigen')
+      return
+    }
 
     try {
       setInviteManageLoading(true)
@@ -333,6 +349,8 @@ export default function AmproAdminPage() {
       setInviteManageUrl('')
       setInviteManageToken(null)
       setInviteManageStatus(null)
+      setInviteDeleteArmed(false)
+      setInviteDeleteConfirmText('')
       showSuccess(`Links verwijderd (${Number(json?.deleted_count || 0)})`)
     } catch (e: any) {
       showError(e?.message || 'Verwijderen mislukt')
@@ -693,7 +711,7 @@ export default function AmproAdminPage() {
         if (rosterResp.error) throw rosterResp.error
 
         const updatesResp = await supabase
-          .from('ampro_updates')
+          .from('ampro_notes')
           .select('id,performance_id,title,body,visibility,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(200)
@@ -799,7 +817,7 @@ export default function AmproAdminPage() {
     if (!rosterResp.error) setRoster(rosterResp.data || [])
 
     const updatesResp = await supabase
-      .from('ampro_updates')
+      .from('ampro_notes')
       .select('id,performance_id,title,body,visibility,created_at,updated_at')
       .order('created_at', { ascending: false })
       .limit(200)
@@ -1229,7 +1247,7 @@ export default function AmproAdminPage() {
       if (!newUpdateBody.trim()) throw new Error('Inhoud is verplicht')
 
       const { error } = await supabase
-        .from('ampro_updates')
+        .from('ampro_notes')
         .insert({
           performance_id: newUpdatePerformanceId,
           title: newUpdateTitle.trim(),
@@ -1948,7 +1966,7 @@ export default function AmproAdminPage() {
                     disabled={inviteManageLoading || !inviteManageProgram?.id}
                     className="h-11 rounded-3xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
-                    Verwijder links
+                    {inviteDeleteArmed ? 'Bevestig verwijderen' : 'Verwijder links'}
                   </button>
 
                   <button
@@ -1982,6 +2000,34 @@ export default function AmproAdminPage() {
                     Kopieer link
                   </button>
                 </div>
+
+                {inviteDeleteArmed ? (
+                  <div className="mt-2 rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <div className="text-sm font-semibold text-red-900">Let op: dit verwijdert alle groepslinks voor dit programma.</div>
+                    <div className="mt-1 text-xs text-red-800">Bestaande links in je groepschat werken dan niet meer.</div>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <input
+                        value={inviteDeleteConfirmText}
+                        onChange={(e) => setInviteDeleteConfirmText(e.target.value)}
+                        placeholder="Typ DELETE om te bevestigen"
+                        className="h-11 rounded-2xl border border-red-200 bg-white px-3 text-sm"
+                        disabled={inviteManageLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInviteDeleteArmed(false)
+                          setInviteDeleteConfirmText('')
+                        }}
+                        disabled={inviteManageLoading}
+                        className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Annuleer
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {inviteManageToken ? (
                   <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">

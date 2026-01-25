@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { safeSelect } from '@/lib/supabaseHelpers'
 
 export const PublicFooter: React.FC = () => {
-  const [supportEmail, setSupportEmail] = useState<string | null>('hello@flowmanager.app')
+  const [supportEmail, setSupportEmail] = useState<string | null>('hub3@gmail.com')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -32,28 +32,28 @@ export const PublicFooter: React.FC = () => {
   }
 
   return (
-    <footer className="bg-white border-t border-slate-200 mt-auto">
+    <footer className="bg-white border-t border-gray-200 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {logoUrl ? (
               <img src={logoUrl} alt="HUB3 logo" className="h-6 object-contain" />
             ) : (
-              <div className="text-sm font-semibold text-slate-900">HUB3</div>
+              <div className="text-sm font-semibold text-gray-900">HUB<p className='text-blue-600 inline'>3</p></div>
             )}
 
             <div className="text-sm">
-              <div className="font-medium text-slate-900">HUB3</div>
+              <div className="font-medium text-gray-900">HUB<p className='text-blue-600 inline'>3</p></div>
               {supportEmail && (
-                <a href={`mailto:${supportEmail}`} className="text-xs text-slate-600 hover:underline">{supportEmail}</a>
+                <a href={`mailto:${supportEmail}`} className="text-xs text-gray-600 hover:underline">{supportEmail}</a>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-slate-600">
+          <div className="flex items-center gap-4 text-xs text-gray-600">
             <Link href="/legal/privacy-policy" className="hover:text-blue-600 transition-colors">Privacybeleid</Link>
             <Link href="/legal/terms" className="hover:text-blue-600 transition-colors">Algemene Voorwaarden</Link>
-            <span className="text-slate-400">© {new Date().getFullYear()} HUB3</span>
+            <span className="text-gray-400">© {new Date().getFullYear()} HUB3</span>
           </div>
         </div>
 

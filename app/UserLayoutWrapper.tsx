@@ -99,7 +99,7 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
 
   // AmPro public pages should match the studio public shell (HUB top nav).
   if (pathname?.startsWith('/ampro')) {
-    const hideAmproTopNav = pathname?.startsWith('/ampro/admin')
+    const hideAmproTopNav = pathname?.startsWith('/ampro/admin') || pathname?.startsWith('/ampro/invite')
     return (
       <div className={`min-h-screen flex flex-col overflow-x-hidden ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
         {hideAmproTopNav

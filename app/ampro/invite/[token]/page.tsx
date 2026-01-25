@@ -110,8 +110,8 @@ export default function AmproInvitePage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <LoadingSpinner size={48} className="mx-auto mb-4" label="Uitnodiging laden" />
           <p className="text-gray-600">Uitnodiging laden…</p>
         </div>
@@ -121,8 +121,8 @@ export default function AmproInvitePage({ params }: Props) {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
@@ -136,8 +136,8 @@ export default function AmproInvitePage({ params }: Props) {
 
   if (error || !lookup) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-10 h-10 text-red-600" />
           </div>
@@ -154,8 +154,8 @@ export default function AmproInvitePage({ params }: Props) {
   const disabled = !lookup.status.ok
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
+    <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full">
         <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <Link2 className="w-10 h-10 text-blue-600" />
         </div>
