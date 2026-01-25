@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Calendar, MapPin } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, ChevronDown } from 'lucide-react'
+import Select from '@/components/Select'
 import { supabase } from '@/lib/supabase'
 import ContentContainer from '@/components/ContentContainer'
 import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
@@ -71,6 +72,8 @@ export default function AmproMijnProjectenDetailPage() {
   const [location, setLocation] = useState<LocationRow | null>(null)
   const [notes, setNotes] = useState<NoteRow[]>([])
   const [creatingCheckout, setCreatingCheckout] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [hasPaid, setHasPaid] = useState(false)
 
   const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
@@ -78,6 +81,7 @@ export default function AmproMijnProjectenDetailPage() {
   const [savingAvailability, setSavingAvailability] = useState(false)
   const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponse] = useState(false)
   const [isAssignedToRequest, setIsAssignedToRequest] = useState(false)
+  const [availabilityOpen, setAvailabilityOpen] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +93,7 @@ export default function AmproMijnProjectenDetailPage() {
         const { data: sessionData } = await supabase.auth.getSession()
         const user = sessionData?.session?.user
         const clientAccessToken = String((sessionData as any)?.session?.access_token || '')
+        if (!cancelled) setUserId(String((user as any)?.id || ''))
         if (!user) {
           router.replace(`/ampro/login?next=${encodeURIComponent(`/ampro/mijn-projecten/${performanceId}`)}`)
           return
@@ -146,17 +151,35 @@ export default function AmproMijnProjectenDetailPage() {
         // between `ampro_programmas` and `stripe_products` in the schema cache.
         let stripeProducts: any[] = []
         try {
-          // Match either platform `program_id` (platform programs) or
-          // `ampro_program_id` (AmPro program rows) — some products may be
-          // linked to ampro_programmas.
+          // Match `ampro_program_id` (AmPro program rows) — `program_id` was removed
           const spResp = await supabase
             .from('stripe_products')
             .select('*')
-            .or(`program_id.eq.${performanceId},ampro_program_id.eq.${performanceId}`)
+            .eq('ampro_program_id', performanceId)
 
           if (!spResp.error && spResp.data) stripeProducts = spResp.data as any
         } catch (err) {
           // ignore — optional feature
+        }
+
+        // Check if the current user already has a successful payment for this program
+        try {
+          if (user) {
+            const paidResp = await supabase
+              .from('stripe_transactions')
+              .select('id')
+              .eq('ampro_program_id', performanceId)
+              .eq('user_id', user.id)
+              .eq('status', 'succeeded')
+              .limit(1)
+              .maybeSingle()
+
+            if (!paidResp.error && paidResp.data && (paidResp.data as any).id) {
+              if (!cancelled) setHasPaid(true)
+            }
+          }
+        } catch (err) {
+          // ignore
         }
 
         // Fetch availability via server API to avoid RLS hiding private requests
@@ -278,7 +301,7 @@ export default function AmproMijnProjectenDetailPage() {
         window.location.href = data.url
       } else if (data.session_id) {
         // Fallback: open stripe hosted URL via session id if provided
-        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`
+        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`;
       } else {
         throw new Error('Geen checkout URL ontvangen')
       }
@@ -336,6 +359,9 @@ export default function AmproMijnProjectenDetailPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(String((json as any)?.error || 'Opslaan mislukt'))
       showSuccess('Beschikbaarheid opgeslagen')
+      // Immediately reflect that the user has submitted availability so the
+      // notification updates without a page refresh.
+      setHasAnyAvailabilityResponse(true)
     } catch (e: any) {
       showError(e?.message || 'Opslaan mislukt')
     } finally {
@@ -421,13 +447,6 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
           ) : null}
 
-          {programma.description ? (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Beschrijving</h2>
-              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
-            </div>
-          ) : null}
-
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
             <div className="grid gap-3">
@@ -441,82 +460,130 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Beschikbaarheid</h2>
-
-            {!availabilityRequest?.id ? (
-              <div className="text-sm text-gray-600">Er is momenteel geen beschikbaarheidsvraag.</div>
-            ) : availabilityDates.length === 0 ? (
-              <div className="text-sm text-gray-600">Geen data ingesteld.</div>
-            ) : (
-              <div className="space-y-4">
-                {!canEditAvailability ? (
-                  <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                    Beschikbaarheid is vergrendeld. Je kan je antwoorden nog bekijken maar niet meer aanpassen.
+              {stripeProduct && priceLabel && !hasPaid ? (
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Betaling</h2>
+                  <div className="text-sm text-gray-700 mb-4">Je inschrijving wordt pas geldig na betaling.</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm font-semibold">{priceLabel}</div>
+                    <button
+                      type="button"
+                      onClick={handleCheckout}
+                      disabled={creatingCheckout}
+                      className={`h-11 ml-4 rounded-3xl px-6 text-sm font-semibold transition-colors ${
+                        creatingCheckout ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {creatingCheckout ? 'Doorsturen…' : 'Betaal'}
+                    </button>
                   </div>
-                ) : null}
-                {availabilityDates.map((d) => {
-                  const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
-                  return (
-                    <div key={d.id} className="rounded-3xl border border-gray-200 p-4">
-                      <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                </div>
+              ) : null}
 
-                      <div className="mt-3 grid gap-3">
-                        <label className="grid gap-1 text-sm font-medium text-gray-700">
-                          Status
-                          <select
-                            value={v.status}
-                            onChange={(e) =>
-                              setAvailabilityDraft((prev) => ({
-                                ...prev,
-                                [String(d.id)]: { ...v, status: e.target.value as any },
-                              }))
-                            }
-                            disabled={!canEditAvailability}
-                            className="h-11 rounded-3xl border border-gray-200 bg-white px-3 text-sm"
-                          >
-                            <option value="yes">Beschikbaar</option>
-                            <option value="no">Niet beschikbaar</option>
-                            <option value="maybe">Misschien</option>
-                          </select>
-                        </label>
-
-                        <label className="grid gap-1 text-sm font-medium text-gray-700">
-                          Comment (optioneel)
-                          <textarea
-                            value={v.comment}
-                            onChange={(e) =>
-                              setAvailabilityDraft((prev) => ({
-                                ...prev,
-                                [String(d.id)]: { ...v, comment: e.target.value },
-                              }))
-                            }
-                            disabled={!canEditAvailability}
-                            placeholder="Bv. 30 min later op deze datum…"
-                            className="min-h-20 rounded-3xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                          />
-                        </label>
-
-                        <div className="text-xs text-gray-600">Huidig: {formatYesNoMaybe(v.status)}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                <button
-                  type="button"
-                  onClick={saveAvailability}
-                  disabled={savingAvailability || !canEditAvailability}
-                  className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
-                    savingAvailability || !canEditAvailability
-                      ? 'bg-blue-100 text-blue-400'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  {savingAvailability ? 'Opslaan…' : 'Opslaan'}
-                </button>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Beschikbaarheid</h2>
+              <button
+                type="button"
+                aria-expanded={availabilityOpen}
+                onClick={() => setAvailabilityOpen((s) => !s)}
+                className="-mr-2 inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-700 focus:outline-none"
+                title={availabilityOpen ? 'Verberg beschikbaarheid' : 'Toon beschikbaarheid'}
+              >
+                <ChevronDown className={`h-5 w-5 transform transition-transform ${availabilityOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            {availabilityRequest?.id ? (
+              <div className="mb-4">
+                {hasAnyAvailabilityResponse ? (
+                  <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
+                    Je hebt je beschikbaarheid doorgegeven.
+                  </div>
+                ) : (
+                  <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm">
+                    Je hebt je beschikbaarheid nog niet doorgegeven.
+                  </div>
+                )}
               </div>
-            )}
+            ) : null}
+
+            {availabilityOpen ? (
+              <>
+                {!availabilityRequest?.id ? (
+                  <div className="text-sm text-gray-600">Er is momenteel geen beschikbaarheidsvraag.</div>
+                ) : availabilityDates.length === 0 ? (
+                  <div className="text-sm text-gray-600">Geen data ingesteld.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {!canEditAvailability ? (
+                      <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                        Beschikbaarheid is vergrendeld. Je kan je antwoorden nog bekijken maar niet meer aanpassen.
+                      </div>
+                    ) : null}
+                    {availabilityDates.map((d) => {
+                      const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
+                      return (
+                        <div key={d.id} className="rounded-3xl border border-gray-200 p-4">
+                          <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+
+                          <div className="mt-3 grid gap-3">
+                            <label className="grid gap-1 text-sm font-medium text-gray-700">
+                              Status
+                              <Select
+                                value={v.status}
+                                onChange={(e) =>
+                                  setAvailabilityDraft((prev) => ({
+                                    ...prev,
+                                    [String(d.id)]: { ...v, status: e.target.value as any },
+                                  }))
+                                }
+                                disabled={!canEditAvailability}
+                                className="h-11 rounded-3xl border border-gray-200 bg-white px-3 text-sm"
+                              >
+                                <option value="yes">Beschikbaar</option>
+                                <option value="no">Niet beschikbaar</option>
+                                <option value="maybe">Misschien</option>
+                              </Select>
+                            </label>
+
+                            <label className="grid gap-1 text-sm font-medium text-gray-700">
+                              Comment (optioneel)
+                              <textarea
+                                value={v.comment}
+                                onChange={(e) =>
+                                  setAvailabilityDraft((prev) => ({
+                                    ...prev,
+                                    [String(d.id)]: { ...v, comment: e.target.value },
+                                  }))
+                                }
+                                disabled={!canEditAvailability}
+                                placeholder="Bv. 30 min later op deze datum…"
+                                className="min-h-20 rounded-3xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                              />
+                            </label>
+
+                            <div className="text-xs text-gray-600">Huidig: {formatYesNoMaybe(v.status)}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={saveAvailability}
+                      disabled={savingAvailability || !canEditAvailability}
+                      className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                        savingAvailability || !canEditAvailability
+                          ? 'bg-blue-100 text-blue-400'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {savingAvailability ? 'Opslaan…' : 'Opslaan'}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
         </div>
       </ContentContainer>

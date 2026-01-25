@@ -56,34 +56,26 @@ export async function POST(request: Request) {
           }
 
           // Fallback: if product already exists locally, reuse its studio_id
-          if (!studioId) {
-            const { data: existing } = await serviceClient
-              .from('stripe_products')
-              .select('studio_id, stripe_account_id, id')
-              .eq('stripe_product_id', stripeProductId)
-              .maybeSingle();
-            if (existing) {
-              studioId = existing.studio_id || null;
-            }
+          const { data: existing } = await serviceClient
+            .from('stripe_products')
+            .select('studio_id, stripe_account_id, id')
+            .eq('stripe_product_id', stripeProductId)
+            .maybeSingle();
+
+          if (!studioId && existing) {
+            studioId = existing.studio_id || null;
           }
 
-          if (!studioId) {
-            console.warn('[Stripe Webhook] product event: could not determine studio for product', stripeProductId);
-          } else {
-            const { data: existing } = await serviceClient
-              .from('stripe_products')
-              .select('*')
-              .eq('stripe_product_id', stripeProductId)
-              .maybeSingle();
-
-            if (existing) {
-              await serviceClient.from('stripe_products').update({
-                name,
-                description,
-                active,
-                stripe_account_id: stripeAccountId || existing.stripe_account_id,
-                updated_at: new Date().toISOString(),
-              }).eq('id', existing.id);
+          // Proceed to upsert the product row. Allow `studio_id` to be null for
+          // platform-only products (new migration makes the column nullable).
+          if (existing) {
+            await serviceClient.from('stripe_products').update({
+              name,
+              description,
+              active,
+              stripe_account_id: stripeAccountId || existing.stripe_account_id,
+              updated_at: new Date().toISOString(),
+            }).eq('id', existing.id);
               // If the product has a default price attached, try to update price fields
               try {
                 const defaultPriceId = obj?.default_price && typeof obj.default_price === 'string'
@@ -115,7 +107,7 @@ export async function POST(request: Request) {
               }
             } else {
               const insertPayload: any = {
-                studio_id: studioId,
+                studio_id: studioId || null,
                 stripe_product_id: stripeProductId,
                 stripe_account_id: stripeAccountId || null,
                 name,
@@ -135,7 +127,6 @@ export async function POST(request: Request) {
 
               const { error: insErr } = await serviceClient.from('stripe_products').insert(insertPayload);
               if (insErr) console.warn('[Stripe Webhook] insert product returned error', insErr);
-            }
           }
         }
 

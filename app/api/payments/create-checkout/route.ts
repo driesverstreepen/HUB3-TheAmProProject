@@ -136,7 +136,10 @@ export async function POST(request: NextRequest) {
       }
       : null;
 
-    if (!studioStripeAccount || !studioStripeAccount.charges_enabled) {
+    // If there's a connected studio Stripe account, require that it's enabled for charges.
+    // If there is no connected account (platform-only payments), continue and create
+    // the Checkout Session on the platform account.
+    if (studioStripeAccount && !studioStripeAccount.charges_enabled) {
       return NextResponse.json({
         error: "Stripe account not configured or not enabled for charges",
       }, { status: 400 });
@@ -167,7 +170,10 @@ export async function POST(request: NextRequest) {
       ? `${origin}/cart`
       : `${origin}/program/${program_id}`;
 
-    // Create checkout session with platform fee
+    // Create checkout session. If a connected studio Stripe account exists we
+    // include platform fee and a transfer destination so the remainder is sent
+    // to the connected account. If there is no connected account we create
+    // a normal Checkout Session on the platform account (no application fee).
     const sessionData: any = {
       mode: stripeProduct.price_interval ? "subscription" : "payment",
       line_items: [
@@ -184,15 +190,21 @@ export async function POST(request: NextRequest) {
         cart_id: cart_id || "",
         studio_id: program.studio_id,
       },
-      payment_intent_data: {
+    };
+
+    if (studioStripeAccount) {
+      // When a connected account exists, collect an application fee and transfer
+      // the remainder to the connected account using transfer_data.destination.
+      sessionData.payment_intent_data = {
         application_fee_amount: platformFeeAmount,
+        transfer_data: { destination: studioStripeAccount.stripe_account_id },
         metadata: {
           program_id,
           studio_id: program.studio_id,
           platform_fee: platformFeePercent.toString(),
         },
-      },
-    };
+      };
+    }
 
     // If user is logged in, use their email
     if (user?.email) {
@@ -212,7 +224,7 @@ export async function POST(request: NextRequest) {
         studio_id: program.studio_id,
         program_id: program.id,
         stripe_checkout_session_id: session.id,
-        stripe_account_id: studioStripeAccount.stripe_account_id,
+        stripe_account_id: studioStripeAccount?.stripe_account_id || null,
         amount: totalAmount,
         platform_fee: platformFeeAmount,
         net_amount: totalAmount - platformFeeAmount,
