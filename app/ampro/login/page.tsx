@@ -49,29 +49,29 @@ export default function AmproLoginPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-2xl font-bold text-slate-900">Login</h1>
-        <p className="mt-1 text-sm text-slate-600">Log in om toegang te krijgen tot inschrijven.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Login</h1>
+        <p className="mt-1 text-sm text-gray-600">Log in om toegang te krijgen tot inschrijven.</p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-3">
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
+          <label className="grid gap-1 text-sm font-medium text-gray-700">
             Email
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+              className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm"
               required
               autoComplete="email"
             />
           </label>
 
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
+          <label className="grid gap-1 text-sm font-medium text-gray-700">
             Wachtwoord
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+              className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm"
               required
               autoComplete="current-password"
             />
@@ -88,15 +88,15 @@ export default function AmproLoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-sm text-slate-700">
+        <div className="mt-6 text-sm text-gray-700">
           Nog geen account?{' '}
-          <Link href="/ampro/signup" className="font-semibold text-slate-900">
+          <Link href="/ampro/signup" className="font-semibold text-gray-900 hover:text-blue-600">
             Account maken
           </Link>
         </div>
 
         <div className="mt-4">
-          <Link href="/ampro" className="text-sm font-semibold text-slate-900">
+          <Link href="/ampro" className="text-sm font-semibold text-gray-900">
             ← Terug
           </Link>
         </div>

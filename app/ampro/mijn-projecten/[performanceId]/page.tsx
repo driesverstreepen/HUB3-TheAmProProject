@@ -77,6 +77,7 @@ export default function AmproMijnProjectenDetailPage() {
   const [availabilityDraft, setAvailabilityDraft] = useState<Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }>>({})
   const [savingAvailability, setSavingAvailability] = useState(false)
   const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponse] = useState(false)
+  const [isAssignedToRequest, setIsAssignedToRequest] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +88,7 @@ export default function AmproMijnProjectenDetailPage() {
 
         const { data: sessionData } = await supabase.auth.getSession()
         const user = sessionData?.session?.user
+        const clientAccessToken = String((sessionData as any)?.session?.access_token || '')
         if (!user) {
           router.replace(`/ampro/login?next=${encodeURIComponent(`/ampro/mijn-projecten/${performanceId}`)}`)
           return
@@ -157,45 +159,28 @@ export default function AmproMijnProjectenDetailPage() {
           // ignore — optional feature
         }
 
-        // Availability request (RLS allows:
-        // - assigned + visible, OR
-        // - assigned + already responded, so users can re-consult later)
-        const reqResp = await supabase
-          .from('ampro_availability_requests')
-          .select('id,performance_id,is_visible,responses_locked,responses_lock_at')
-          .eq('performance_id', performanceId)
-          .maybeSingle()
-
-        if (reqResp.error) throw reqResp.error
-
+        // Fetch availability via server API to avoid RLS hiding private requests
         let dates: AvailabilityDateRow[] = []
         let draft: Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }> = {}
         let anyResponse = false
 
-        if (reqResp.data?.id) {
-          const datesResp = await supabase
-            .from('ampro_availability_request_dates')
-            .select('id,request_id,day')
-            .eq('request_id', reqResp.data.id)
-            .order('day', { ascending: true })
+        try {
+          const resp = await fetch(`/api/ampro/availability/${encodeURIComponent(performanceId)}`, {
+            headers: { Authorization: `Bearer ${clientAccessToken}` },
+          })
 
-          if (datesResp.error) throw datesResp.error
-          dates = (datesResp.data as any) || []
+          const json = await resp.json()
+          if (!resp.ok) {
+            // No request visible or forbidden — keep graceful fallback
+          } else if (json?.request) {
+            const req = json.request
+            const fetchedDates = Array.isArray(json.dates) ? json.dates : []
+            const fetchedResponses = Array.isArray(json.responses) ? json.responses : []
 
-          if (dates.length) {
-            const responsesResp = await supabase
-              .from('ampro_availability_responses')
-              .select('request_date_id,status,comment')
-              .eq('user_id', user.id)
-              .in(
-                'request_date_id',
-                dates.map((d) => d.id),
-              )
-
-            if (responsesResp.error) throw responsesResp.error
+            dates = fetchedDates as any
 
             const byDateId: Record<string, AvailabilityResponseRow> = {}
-            for (const r of (responsesResp.data as any) || []) {
+            for (const r of fetchedResponses) {
               const id = String((r as any)?.request_date_id || '')
               if (!id) continue
               byDateId[id] = r as any
@@ -211,14 +196,19 @@ export default function AmproMijnProjectenDetailPage() {
                 comment,
               }
             }
+
+            setIsAssignedToRequest(Boolean(json.isAssignedToRequest))
+            setAvailabilityRequest(req as any)
           }
+        } catch (err) {
+          // ignore and fall back to original behavior
         }
 
         if (!cancelled) {
           setProgramma(perfResp.data as any)
           setLocation(loc)
           setNotes((notesResp.data as any) || [])
-          setAvailabilityRequest((reqResp.data as any) || null)
+          // availabilityRequest is set earlier when the server API returns data
           setAvailabilityDates(dates)
           setAvailabilityDraft(draft)
           setHasAnyAvailabilityResponse(anyResponse)
@@ -274,7 +264,7 @@ export default function AmproMijnProjectenDetailPage() {
       const res = await fetch('/api/payments/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ program_id: programa.id }),
+        body: JSON.stringify({ program_id: programma.id }),
         credentials: 'same-origin',
       })
 
@@ -306,7 +296,7 @@ export default function AmproMijnProjectenDetailPage() {
   )
 
   const canEditAvailability = Boolean(
-    availabilityRequest?.id && !availabilityLocked && (availabilityRequest?.is_visible || hasAnyAvailabilityResponse),
+    availabilityRequest?.id && !availabilityLocked && (availabilityRequest?.is_visible || hasAnyAvailabilityResponse || isAssignedToRequest),
   )
 
   async function saveAvailability() {
@@ -321,7 +311,8 @@ export default function AmproMijnProjectenDetailPage() {
 
       const { data: sessionData } = await supabase.auth.getSession()
       const user = sessionData?.session?.user
-      if (!user) throw new Error('Je bent niet ingelogd')
+      const token = String((sessionData as any)?.session?.access_token || '')
+      if (!user || !token) throw new Error('Je bent niet ingelogd')
 
       const rows = availabilityDates.map((d) => {
         const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
@@ -333,11 +324,17 @@ export default function AmproMijnProjectenDetailPage() {
         }
       })
 
-      const { error } = await supabase
-        .from('ampro_availability_responses')
-        .upsert(rows as any, { onConflict: 'request_date_id,user_id' })
+      const res = await fetch(`/api/ampro/availability/${encodeURIComponent(performanceId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ responses: rows }),
+      })
 
-      if (error) throw error
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(String((json as any)?.error || 'Opslaan mislukt'))
       showSuccess('Beschikbaarheid opgeslagen')
     } catch (e: any) {
       showError(e?.message || 'Opslaan mislukt')
@@ -352,37 +349,37 @@ export default function AmproMijnProjectenDetailPage() {
     return (
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-3xl px-6 py-12">
-          <Link href="/ampro/mijn-projecten" className="text-sm font-semibold text-slate-900">
+          <Link href="/ampro/mijn-projecten" className="text-sm font-semibold text-gray-900">
             ← Terug
           </Link>
-          <div className="mt-6 text-sm text-slate-600">Programma niet gevonden.</div>
+          <div className="mt-6 text-sm text-gray-600">Programma niet gevonden.</div>
         </div>
       </main>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gray-50">
       <ContentContainer className="py-8">
         <button
           type="button"
           onClick={() => router.push('/ampro/mijn-projecten')}
-          className="mb-6 inline-flex items-center gap-2 text-slate-600 hover:text-slate-900"
+          className="mb-6 inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-5 w-5" />
           Terug naar mijn projecten
         </button>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-            <h1 className="text-3xl font-bold text-slate-900">{programma.title}</h1>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h1 className="text-3xl font-bold text-gray-900">{programma.title}</h1>
 
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 {typeLabel}
               </span>
               {programma.region ? (
-                <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                   {programma.region}
                 </span>
               ) : null}
@@ -390,18 +387,18 @@ export default function AmproMijnProjectenDetailPage() {
           </div>
 
           {infoHasAny ? (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-4">Informatie</h2>
-              <div className="grid gap-3 text-sm text-slate-700">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
+              <div className="grid gap-3 text-sm text-gray-700">
                 {location ? (
                   <div className="flex items-start gap-2">
-                    <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
+                    <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
                     <div className="grid gap-1">
                       <div>
-                        <span className="text-slate-900">Locatie:</span> {location.name}
+                        <span className="text-gray-900">Locatie:</span> {location.name}
                       </div>
                       {location.address ? (
-                        <div className="text-xs text-slate-600 whitespace-pre-wrap">{location.address}</div>
+                        <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
                       ) : null}
                     </div>
                   </div>
@@ -409,14 +406,14 @@ export default function AmproMijnProjectenDetailPage() {
 
                 {rehearsalLabel ? (
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <Calendar className="h-4 w-4 text-gray-400" />
                     <span>Repetitie periode: {rehearsalLabel}</span>
                   </div>
                 ) : null}
 
                 {performanceDatesLabel ? (
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <Calendar className="h-4 w-4 text-gray-400" />
                     <span>Voorstellingsdata: {performanceDatesLabel}</span>
                   </div>
                 ) : null}
@@ -425,47 +422,47 @@ export default function AmproMijnProjectenDetailPage() {
           ) : null}
 
           {programma.description ? (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-4">Beschrijving</h2>
-              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Beschrijving</h2>
+              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
             </div>
           ) : null}
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Notes</h2>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
             <div className="grid gap-3">
               {notes.map((n) => (
-                <div key={n.id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{n.title}</div>
-                  <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
+                <div key={n.id} className="rounded-3xl border border-gray-200 p-4">
+                  <div className="text-sm font-semibold text-gray-900">{n.title}</div>
+                  <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{n.body}</div>
                 </div>
               ))}
-              {notes.length === 0 ? <div className="text-sm text-slate-600">Nog geen notes.</div> : null}
+              {notes.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Beschikbaarheid</h2>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Beschikbaarheid</h2>
 
             {!availabilityRequest?.id ? (
-              <div className="text-sm text-slate-600">Er is momenteel geen beschikbaarheidsvraag.</div>
+              <div className="text-sm text-gray-600">Er is momenteel geen beschikbaarheidsvraag.</div>
             ) : availabilityDates.length === 0 ? (
-              <div className="text-sm text-slate-600">Geen data ingesteld.</div>
+              <div className="text-sm text-gray-600">Geen data ingesteld.</div>
             ) : (
               <div className="space-y-4">
                 {!canEditAvailability ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                     Beschikbaarheid is vergrendeld. Je kan je antwoorden nog bekijken maar niet meer aanpassen.
                   </div>
                 ) : null}
                 {availabilityDates.map((d) => {
                   const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
                   return (
-                    <div key={d.id} className="rounded-xl border border-slate-200 p-4">
-                      <div className="text-sm font-semibold text-slate-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                    <div key={d.id} className="rounded-3xl border border-gray-200 p-4">
+                      <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
 
                       <div className="mt-3 grid gap-3">
-                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                        <label className="grid gap-1 text-sm font-medium text-gray-700">
                           Status
                           <select
                             value={v.status}
@@ -476,7 +473,7 @@ export default function AmproMijnProjectenDetailPage() {
                               }))
                             }
                             disabled={!canEditAvailability}
-                            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                            className="h-11 rounded-3xl border border-gray-200 bg-white px-3 text-sm"
                           >
                             <option value="yes">Beschikbaar</option>
                             <option value="no">Niet beschikbaar</option>
@@ -484,7 +481,7 @@ export default function AmproMijnProjectenDetailPage() {
                           </select>
                         </label>
 
-                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                        <label className="grid gap-1 text-sm font-medium text-gray-700">
                           Comment (optioneel)
                           <textarea
                             value={v.comment}
@@ -496,11 +493,11 @@ export default function AmproMijnProjectenDetailPage() {
                             }
                             disabled={!canEditAvailability}
                             placeholder="Bv. 30 min later op deze datum…"
-                            className="min-h-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            className="min-h-20 rounded-3xl border border-gray-200 bg-white px-3 py-2 text-sm"
                           />
                         </label>
 
-                        <div className="text-xs text-slate-600">Huidig: {formatYesNoMaybe(v.status)}</div>
+                        <div className="text-xs text-gray-600">Huidig: {formatYesNoMaybe(v.status)}</div>
                       </div>
                     </div>
                   )
@@ -510,13 +507,13 @@ export default function AmproMijnProjectenDetailPage() {
                   type="button"
                   onClick={saveAvailability}
                   disabled={savingAvailability || !canEditAvailability}
-                  className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                  className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                     savingAvailability || !canEditAvailability
                       ? 'bg-blue-100 text-blue-400'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
-                  {savingAvailability ? 'Opslaan…' : 'Opslaan beschikbaarheid'}
+                  {savingAvailability ? 'Opslaan…' : 'Opslaan'}
                 </button>
               </div>
             )}

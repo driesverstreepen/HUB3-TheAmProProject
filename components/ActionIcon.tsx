@@ -16,8 +16,8 @@ export default function ActionIcon({ icon: Icon, children, size = 18, variant = 
     variant === 'danger'
       ? 'text-red-600 hover:text-red-700'
       : variant === 'primary'
-      ? 'text-blue-600 hover:text-blue-700'
-      : 'text-slate-500 hover:text-slate-700';
+      ? 'text-gray-600 hover:text-blue-600'
+      : 'text-gray-500 hover:text-blue-600';
 
   return (
     <button

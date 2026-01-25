@@ -99,7 +99,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
               {messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`max-w-sm w-full sm:w-auto rounded-lg p-3 shadow-lg t-bodySm text-white! ${m.type === 'success' ? 'bg-green-600' : m.type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`}
+                  className={`max-w-sm w-full sm:w-auto rounded-3xl p-3 shadow-lg text-sm text-white! ${m.type === 'success' ? 'bg-green-600' : m.type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`}
                 >
                   <div className="flex items-center min-w-0">
                     {m.type === 'info' && m.withSpinner && (

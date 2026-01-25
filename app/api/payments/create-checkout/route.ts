@@ -169,10 +169,10 @@ export async function POST(request: NextRequest) {
 
     // Create checkout session with platform fee
     const sessionData: any = {
-      mode: stripePrice.interval ? "subscription" : "payment",
+      mode: stripeProduct.price_interval ? "subscription" : "payment",
       line_items: [
         {
-          price: stripePrice.stripe_price_id,
+          price: stripePriceId,
           quantity: 1,
         },
       ],

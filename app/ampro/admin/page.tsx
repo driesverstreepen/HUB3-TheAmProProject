@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar } from 'lucide-react'
+import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isAmproAdmin, parseAmproFormFields, type AmproFormField } from '@/lib/ampro'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -127,6 +127,9 @@ export default function AmproAdminPage() {
   const [forms, setForms] = useState<any[]>([])
   const [formIdByProgramId, setFormIdByProgramId] = useState<Record<string, string>>({})
   const [applications, setApplications] = useState<any[]>([])
+  const [appsExpandedByProgram, setAppsExpandedByProgram] = useState<Record<string, boolean>>({})
+  const [stagedStatuses, setStagedStatuses] = useState<Record<string, string>>({})
+  const [savingGroup, setSavingGroup] = useState<Record<string, boolean>>({})
   const [roster, setRoster] = useState<any[]>([])
   const [updates, setUpdates] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
@@ -400,6 +403,7 @@ export default function AmproAdminPage() {
   const [newFormName, setNewFormName] = useState('')
   const [newFormFields, setNewFormFields] = useState<FormFieldDraft[]>([])
   const [savingForm, setSavingForm] = useState(false)
+  const [editingFormId, setEditingFormId] = useState<string | null>(null)
 
   const [newLocationName, setNewLocationName] = useState('')
   const [newLocationAddress, setNewLocationAddress] = useState('')
@@ -746,6 +750,19 @@ export default function AmproAdminPage() {
     }
   }
 
+  async function deleteProgram(programId: string) {
+    try {
+      if (!programId) return
+      if (!confirm('Weet je zeker dat je dit programma wilt verwijderen?')) return
+      const { error } = await supabase.from('ampro_programmas').delete().eq('id', programId)
+      if (error) throw error
+      await refresh()
+      showSuccess('Programma verwijderd')
+    } catch (e: any) {
+      showError(e?.message || 'Kon programma niet verwijderen')
+    }
+  }
+
   async function createForm() {
     try {
       setSavingForm(true)
@@ -801,16 +818,21 @@ export default function AmproAdminPage() {
         }
       })
 
-      const { error } = await supabase
-        .from('ampro_forms')
-        .insert({ name: newFormName.trim(), fields_json: built })
-      if (error) throw error
+      if (editingFormId) {
+        const { error } = await supabase.from('ampro_forms').update({ name: newFormName.trim(), fields_json: built }).eq('id', editingFormId)
+        if (error) throw error
+        setEditingFormId(null)
+        showSuccess('Form bijgewerkt')
+      } else {
+        const { error } = await supabase.from('ampro_forms').insert({ name: newFormName.trim(), fields_json: built })
+        if (error) throw error
+        showSuccess('Form aangemaakt')
+      }
 
       setNewFormName('')
       setNewFormFields([])
       setFormModalOpen(false)
       await refresh()
-      showSuccess('Form aangemaakt')
     } catch (e: any) {
       showError(e?.message || 'Kon form niet aanmaken')
     } finally {
@@ -840,9 +862,32 @@ export default function AmproAdminPage() {
 
       if (performanceId && userId) {
         if (status === 'accepted') {
+          // Try to infer a role name from the application's answers if present.
+          const answers = (fromState as any)?.answers_json || {}
+          const possibleKeys = ['role', 'rol', 'desired_role', 'functie', 'position', 'requested_role']
+          let inferredRole: string | null = null
+          for (const k of possibleKeys) {
+            const v = (answers as any)[k]
+            if (!v) continue
+            if (typeof v === 'string' && v.trim()) {
+              inferredRole = v.trim()
+              break
+            }
+            if (typeof v === 'object') {
+              if (v.label) {
+                inferredRole = String(v.label)
+                break
+              }
+              if (v.value) {
+                inferredRole = String(v.value)
+                break
+              }
+            }
+          }
+
           const upsertRoster = await supabase
             .from('ampro_roster')
-            .upsert({ performance_id: performanceId, user_id: userId, role_name: null } as any)
+            .upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole } as any)
           if (upsertRoster.error) throw upsertRoster.error
         } else {
           const delRoster = await supabase
@@ -859,6 +904,80 @@ export default function AmproAdminPage() {
       showSuccess('Status aangepast')
     } catch (e: any) {
       showError(e?.message || 'Status aanpassen mislukt')
+    }
+  }
+
+  function stageStatus(appId: string, status: 'pending' | 'accepted' | 'rejected' | 'maybe') {
+    setStagedStatuses((prev) => ({ ...prev, [appId]: status }))
+  }
+
+  async function saveGroupStatuses(performanceId: string) {
+    try {
+      setSavingGroup((s) => ({ ...s, [performanceId]: true }))
+
+      const apps = (applications || []).filter((a: any) => String(a.performance_id || '') === String(performanceId))
+      const toSave = apps.filter((a: any) => {
+        const staged = stagedStatuses[String(a.id)]
+        return staged !== undefined && String(staged) !== String(a.status)
+      })
+
+      for (const a of toSave) {
+        const desired = stagedStatuses[String(a.id)]
+        if (!desired) continue
+
+        const { error } = await supabase.from('ampro_applications').update({ status: desired }).eq('id', a.id)
+        if (error) throw error
+
+        const performanceId = String(a.performance_id || '')
+        const userId = String(a.user_id || '')
+        if (desired === 'accepted') {
+          // Attempt to extract a role from the application's answers JSON.
+          const answers = (a as any)?.answers_json || {}
+          const possibleKeys = ['role', 'rol', 'desired_role', 'functie', 'position', 'requested_role']
+          let inferredRole: string | null = null
+          for (const k of possibleKeys) {
+            const v = (answers as any)[k]
+            if (!v) continue
+            if (typeof v === 'string' && v.trim()) {
+              inferredRole = v.trim()
+              break
+            }
+            if (typeof v === 'object') {
+              if (v.label) {
+                inferredRole = String(v.label)
+                break
+              }
+              if (v.value) {
+                inferredRole = String(v.value)
+                break
+              }
+            }
+          }
+
+          const upsertRoster = await supabase.from('ampro_roster').upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole } as any)
+          if (upsertRoster.error) throw upsertRoster.error
+        } else {
+          const delRoster = await supabase
+            .from('ampro_roster')
+            .delete()
+            .eq('performance_id', performanceId)
+            .eq('user_id', userId)
+          if (delRoster.error) throw delRoster.error
+        }
+      }
+
+      setStagedStatuses((prev) => {
+        const next = { ...prev }
+        for (const a of toSave) delete next[String(a.id)]
+        return next
+      })
+
+      await refresh()
+      showSuccess('Statussen opgeslagen')
+    } catch (e: any) {
+      showError(e?.message || 'Kon statussen niet opslaan')
+    } finally {
+      setSavingGroup((s) => ({ ...s, [performanceId]: false }))
     }
   }
 
@@ -983,12 +1102,12 @@ export default function AmproAdminPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gray-50">
       <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
-        <div className="flex min-h-0 flex-1 flex-col border-r border-slate-200 bg-white">
+        <div className="flex min-h-0 flex-1 flex-col border-r border-gray-200 bg-white">
           <div className="px-5 py-5">
-            <div className="text-sm font-semibold text-slate-900">The AmProProject</div>
-            <div className="text-xs text-slate-600">Admin</div>
+            <div className="text-sm font-semibold text-gray-900">The AmProProject</div>
+            <div className="text-xs text-gray-600">Admin</div>
           </div>
 
           <div className="flex-1 px-3 pb-4">
@@ -1002,11 +1121,11 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={() => setActive(item.key)}
                     className={
-                      'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ' +
-                      (isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50')
+                      'flex items-center gap-3 rounded-3xl px-3 py-2 text-sm font-semibold transition-colors ' +
+                      (isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50')
                     }
                   >
-                    <Icon className={isActive ? 'h-4 w-4 text-blue-700' : 'h-4 w-4 text-slate-500'} />
+                    <Icon className={isActive ? 'h-4 w-4 text-blue-700' : 'h-4 w-4 text-gray-500'} />
                     {item.label}
                   </button>
                 )
@@ -1015,7 +1134,7 @@ export default function AmproAdminPage() {
           </div>
 
           <div className="px-5 pb-5">
-            <Link href="/ampro" className="text-sm font-semibold text-slate-900">
+            <Link href="/ampro" className="text-sm font-semibold text-gray-900">
               ← Terug
             </Link>
           </div>
@@ -1025,7 +1144,7 @@ export default function AmproAdminPage() {
       <div className="md:pl-64">
         <main className="p-4 md:p-6 lg:p-8">
           <div className="mx-auto max-w-5xl">
-            <div className="md:hidden mb-4 rounded-xl border border-slate-200 bg-white p-2">
+            <div className="md:hidden mb-4 rounded-2xl border border-gray-200 bg-white p-2">
               <div className="flex gap-2 overflow-x-auto">
                 {sidebarItems.map((item) => {
                   const isActive = active === item.key
@@ -1035,8 +1154,8 @@ export default function AmproAdminPage() {
                       type="button"
                       onClick={() => setActive(item.key)}
                       className={
-                        'whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold ' +
-                        (isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700')
+                        'whitespace-nowrap rounded-3xl px-3 py-2 text-sm font-semibold ' +
+                        (isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700')
                       }
                     >
                       {item.label}
@@ -1052,28 +1171,28 @@ export default function AmproAdminPage() {
               ariaLabel={editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-slate-900">{editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}</h2>
-              <p className="mt-1 text-sm text-slate-600">Vul de velden in.</p>
+              <h2 className="text-xl font-bold text-gray-900">{editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Vul de velden in.</p>
 
               <div className="mt-6 grid gap-3">
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Type programma
                   <select
                     value={newProgramType}
                     onChange={(e) => setNewProgramType(e.target.value as any)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
                     <option value="performance">Performance</option>
                     <option value="workshop">Workshop</option>
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Locatie
                   <select
                     value={newLocationId}
                     onChange={(e) => setNewLocationId(e.target.value)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
                     <option value="">Geen locatie</option>
                     {locations.map((l) => (
@@ -1084,54 +1203,54 @@ export default function AmproAdminPage() {
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Titel
                   <input
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="Titel"
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Beschrijving
                   <textarea
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     placeholder="Beschrijving (optioneel)"
-                    className="min-h-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className="min-h-28 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-sm font-medium text-slate-700">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
                     Regio
                     <input
                       value={newRegion}
                       onChange={(e) => setNewRegion(e.target.value)}
                       placeholder="Regio"
-                      className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
 
-                  <label className="grid gap-1 text-sm font-medium text-slate-700">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
                     Deadline
                     <input
                       value={newApplicationDeadline}
                       onChange={(e) => setNewApplicationDeadline(e.target.value)}
                       placeholder="dd/mm/jjjj"
-                      className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
                 </div>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Formulier (voor inschrijving)
                   <select
                     value={newFormId}
                     onChange={(e) => setNewFormId(e.target.value)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
                     <option value="">Geen formulier</option>
                     {forms.map((f) => (
@@ -1143,52 +1262,52 @@ export default function AmproAdminPage() {
                 </label>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-sm font-medium text-slate-700">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
                     Repetitie start
                     <input
                       value={newRehearsalStart}
                       onChange={(e) => setNewRehearsalStart(e.target.value)}
                       placeholder="dd/mm/jjjj"
-                      className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
-                  <label className="grid gap-1 text-sm font-medium text-slate-700">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
                     Repetitie einde
                     <input
                       value={newRehearsalEnd}
                       onChange={(e) => setNewRehearsalEnd(e.target.value)}
                       placeholder="dd/mm/jjjj"
-                      className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
                 </div>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Data (meerdere toegestaan)
                   <textarea
                     value={newPerformanceDates}
                     onChange={(e) => setNewPerformanceDates(e.target.value)}
                     placeholder="dd/mm/jjjj (1 per lijn of komma gescheiden)"
-                    className="min-h-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                     <input
                       type="checkbox"
                       checked={newIsPublic}
                       onChange={(e) => setNewIsPublic(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300"
+                      className="h-4 w-4 rounded border-gray-300"
                     />
                     Publiek zichtbaar
                   </label>
-                  <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                     <input
                       type="checkbox"
                       checked={newApplicationsOpen}
                       onChange={(e) => setNewApplicationsOpen(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300"
+                      className="h-4 w-4 rounded border-gray-300"
                     />
                     Inschrijvingen open
                   </label>
@@ -1198,7 +1317,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={() => setProgrammaModalOpen(false)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
                   >
                     Annuleren
                   </button>
@@ -1206,7 +1325,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={saveProgramma}
                     disabled={saving}
-                    className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                       saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -1218,31 +1337,34 @@ export default function AmproAdminPage() {
 
             <Modal
               isOpen={formModalOpen}
-              onClose={() => setFormModalOpen(false)}
-              ariaLabel="Nieuwe form"
+              onClose={() => {
+                setFormModalOpen(false)
+                setEditingFormId(null)
+              }}
+              ariaLabel={editingFormId ? 'Formulier bewerken' : 'Nieuwe form'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-slate-900">Nieuwe form</h2>
-              <p className="mt-1 text-sm text-slate-600">Maak een inschrijfformulier voor een programma.</p>
+              <h2 className="text-xl font-bold text-gray-900">{editingFormId ? 'Formulier bewerken' : 'Nieuwe form'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Maak een inschrijfformulier voor een programma.</p>
 
               <div className="mt-6 grid gap-3">
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Naam
                   <input
                     value={newFormName}
                     onChange={(e) => setNewFormName(e.target.value)}
                     placeholder="Naam"
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="rounded-3xl border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-slate-900">Velden</div>
+                    <div className="text-sm font-semibold text-gray-900">Velden</div>
                     <button
                       type="button"
                       onClick={() => setNewFormFields((prev) => [...prev, makeEmptyFieldDraft()])}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                       <Plus className="h-4 w-4" />
                       Veld toevoegen
@@ -1250,7 +1372,7 @@ export default function AmproAdminPage() {
                   </div>
 
                   {newFormFields.length === 0 ? (
-                    <div className="mt-3 text-sm text-slate-600">Nog geen velden. Klik op “Veld toevoegen”.</div>
+                    <div className="mt-3 text-sm text-gray-600">Nog geen velden. Klik op “Veld toevoegen”.</div>
                   ) : null}
 
                   <div className="mt-4 grid gap-3">
@@ -1259,9 +1381,9 @@ export default function AmproAdminPage() {
                       const isSelect = field.type === 'select'
 
                       return (
-                        <div key={field.id} className="rounded-xl border border-slate-200 p-4">
+                        <div key={field.id} className="rounded-3xl border border-gray-200 p-4">
                           <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm font-semibold text-slate-900">Veld {idx + 1}</div>
+                            <div className="text-sm font-semibold text-gray-900">Veld {idx + 1}</div>
                             <button
                               type="button"
                               onClick={() => setNewFormFields((prev) => prev.filter((f) => f.id !== field.id))}
@@ -1273,7 +1395,7 @@ export default function AmproAdminPage() {
 
                           <div className="mt-3 grid gap-3">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
                                 Label
                                 <input
                                   value={field.label}
@@ -1282,20 +1404,20 @@ export default function AmproAdminPage() {
                                     setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, label: nextLabel } : f)))
                                   }}
                                   placeholder="bv. Ervaring"
-                                  className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                 />
                               </label>
 
-                              <div className="grid gap-1 text-sm font-medium text-slate-700">
+                              <div className="grid gap-1 text-sm font-medium text-gray-700">
                                 Key
-                                <div className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm flex items-center text-slate-600">
+                                <div className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-sm flex items-center text-gray-600">
                                   Automatisch
                                 </div>
                               </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
                                 Type
                                 <select
                                   value={field.type}
@@ -1316,7 +1438,7 @@ export default function AmproAdminPage() {
                                       }),
                                     )
                                   }}
-                                  className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                 >
                                   <option value="text">Tekst</option>
                                   <option value="textarea">Tekstvak (groot)</option>
@@ -1326,21 +1448,21 @@ export default function AmproAdminPage() {
                                 </select>
                               </label>
 
-                              <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 mt-7">
+                              <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 mt-7">
                                 <input
                                   type="checkbox"
                                   checked={field.required}
                                   onChange={(e) =>
                                     setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, required: e.target.checked } : f)))
                                   }
-                                  className="h-4 w-4 rounded border-slate-300"
+                                  className="h-4 w-4 rounded border-gray-300"
                                 />
                                 Verplicht
                               </label>
                             </div>
 
                             {showPlaceholder ? (
-                              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
                                 Placeholder (optioneel)
                                 <input
                                   value={field.placeholder}
@@ -1348,15 +1470,15 @@ export default function AmproAdminPage() {
                                     setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, placeholder: e.target.value } : f)))
                                   }
                                   placeholder="Tekst in het veld…"
-                                  className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                 />
                               </label>
                             ) : null}
 
                             {isSelect ? (
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="text-sm font-semibold text-slate-900">Opties</div>
+                                  <div className="text-sm font-semibold text-gray-900">Opties</div>
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1368,7 +1490,7 @@ export default function AmproAdminPage() {
                                         ),
                                       )
                                     }
-                                    className="text-sm font-semibold text-blue-700 hover:text-blue-800"
+                                    className="text-sm font-semibold rounded-3xl text-blue-700 hover:text-blue-800"
                                   >
                                     + optie
                                   </button>
@@ -1377,7 +1499,7 @@ export default function AmproAdminPage() {
                                 <div className="mt-3 grid gap-2">
                                   {(field.options || []).map((opt) => (
                                     <div key={opt.id} className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-2 items-end">
-                                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                                      <label className="grid gap-1 text-sm font-medium text-gray-700">
                                         Label
                                         <input
                                           value={opt.label}
@@ -1393,10 +1515,10 @@ export default function AmproAdminPage() {
                                               }),
                                             )
                                           }}
-                                          className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                          className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                         />
                                       </label>
-                                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                                      <label className="grid gap-1 text-sm font-medium text-gray-700">
                                         Value
                                         <input
                                           value={opt.value}
@@ -1413,7 +1535,7 @@ export default function AmproAdminPage() {
                                             )
                                           }}
                                           placeholder="(optioneel)"
-                                          className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                          className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                         />
                                       </label>
                                       <button
@@ -1426,14 +1548,14 @@ export default function AmproAdminPage() {
                                             }),
                                           )
                                         }
-                                        className="h-11 rounded-lg px-3 text-sm font-semibold bg-white border border-slate-200 text-slate-900 hover:bg-slate-50"
+                                        className="h-11 rounded-3xl px-3 text-sm font-semibold bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
                                       >
                                         Verwijder
                                       </button>
                                     </div>
                                   ))}
                                 </div>
-                                <div className="mt-2 text-xs text-slate-600">Laat “Value” leeg om automatisch af te leiden uit het label.</div>
+                                <div className="mt-2 text-xs text-gray-600">Laat “Value” leeg om automatisch af te leiden uit het label.</div>
                               </div>
                             ) : null}
                           </div>
@@ -1446,8 +1568,11 @@ export default function AmproAdminPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setFormModalOpen(false)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+                    onClick={() => {
+                      setFormModalOpen(false)
+                      setEditingFormId(null)
+                    }}
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
                   >
                     Annuleren
                   </button>
@@ -1455,11 +1580,11 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={createForm}
                     disabled={savingForm}
-                    className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                       savingForm ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {savingForm ? 'Opslaan…' : 'Aanmaken'}
+                    {savingForm ? 'Opslaan…' : editingFormId ? 'Opslaan' : 'Aanmaken'}
                   </button>
                 </div>
               </div>
@@ -1471,16 +1596,16 @@ export default function AmproAdminPage() {
               ariaLabel="Nieuwe note"
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-slate-900">Nieuwe note</h2>
-              <p className="mt-1 text-sm text-slate-600">Note wordt zichtbaar voor geaccepteerde users.</p>
+              <h2 className="text-xl font-bold text-gray-900">Nieuwe note</h2>
+              <p className="mt-1 text-sm text-gray-600">Note wordt zichtbaar voor geaccepteerde users.</p>
 
               <div className="mt-6 grid gap-3">
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Programma
                   <select
                     value={newUpdatePerformanceId}
                     onChange={(e) => setNewUpdatePerformanceId(e.target.value)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
                     <option value="">Kies een programma</option>
                     {performances.map((p) => (
@@ -1491,23 +1616,23 @@ export default function AmproAdminPage() {
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Titel
                   <input
                     value={newUpdateTitle}
                     onChange={(e) => setNewUpdateTitle(e.target.value)}
                     placeholder="Titel"
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Inhoud
                   <textarea
                     value={newUpdateBody}
                     onChange={(e) => setNewUpdateBody(e.target.value)}
                     placeholder="Inhoud"
-                    className="min-h-32 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
 
@@ -1515,7 +1640,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={() => setNoteModalOpen(false)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
                   >
                     Annuleren
                   </button>
@@ -1523,7 +1648,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={createUpdate}
                     disabled={savingUpdate}
-                    className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                       savingUpdate ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -1539,27 +1664,27 @@ export default function AmproAdminPage() {
               ariaLabel={editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-slate-900">{editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}</h2>
-              <p className="mt-1 text-sm text-slate-600">Voeg een locatie toe die je kan koppelen aan programma’s.</p>
+              <h2 className="text-xl font-bold text-gray-900">{editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Voeg een locatie toe die je kan koppelen aan programma’s.</p>
 
               <div className="mt-6 grid gap-3">
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Naam
                   <input
                     value={newLocationName}
                     onChange={(e) => setNewLocationName(e.target.value)}
                     placeholder="Naam"
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
-                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Adres
                   <textarea
                     value={newLocationAddress}
                     onChange={(e) => setNewLocationAddress(e.target.value)}
                     placeholder="Adres (optioneel)"
-                    className="min-h-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
 
@@ -1567,7 +1692,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={() => setLocationModalOpen(false)}
-                    className="h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
                   >
                     Annuleren
                   </button>
@@ -1575,7 +1700,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={saveLocation}
                     disabled={savingLocation}
-                    className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                       savingLocation ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -1631,44 +1756,44 @@ export default function AmproAdminPage() {
                     return (
                       <div className="space-y-6">
                         <div>
-                          <h2 className="text-xl font-bold text-slate-900">User gegevens</h2>
+                          <h2 className="text-xl font-bold text-gray-900">User gegevens</h2>
                         </div>
 
                         <div>
-                          <div className="text-sm font-semibold text-slate-900">{name}</div>
-                          <div className="mt-1 text-sm text-slate-600">Voorstelling: {perfTitle}</div>
-                          <div className="mt-1 text-xs text-slate-500">Status: {String(memberDetailApp.status || '')}</div>
+                          <div className="text-sm font-semibold text-gray-900">{name}</div>
+                          <div className="mt-1 text-sm text-gray-600">Voorstelling: {perfTitle}</div>
+                          <div className="mt-1 text-xs text-gray-500">Status: {String(memberDetailApp.status || '')}</div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <div className="text-sm font-semibold text-slate-900">User gegevens</div>
+                        <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                          <div className="text-sm font-semibold text-gray-900">User gegevens</div>
                           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {formattedSnapshotRows.map((r) => (
-                              <div key={r.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                <div className="text-xs font-semibold text-slate-600">{r.label}</div>
-                                <div className="mt-1 text-sm font-semibold text-slate-900 break-words">{r.value || '-'}</div>
+                              <div key={r.label} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="text-xs font-semibold text-gray-600">{r.label}</div>
+                                <div className="mt-1 text-sm font-semibold text-gray-900 break-words">{r.value || '-'}</div>
                               </div>
                             ))}
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <div className="text-sm font-semibold text-slate-900">Form gegevens</div>
-                          <div className="mt-1 text-sm text-slate-600">{formRow?.name || 'Geen form gekoppeld'}</div>
+                        <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                          <div className="text-sm font-semibold text-gray-900">Form gegevens</div>
+                          <div className="mt-1 text-sm text-gray-600">{formRow?.name || 'Geen form gekoppeld'}</div>
 
                           {formFields.length ? (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {formFields.map((f) => (
-                                <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                  <div className="text-xs font-semibold text-slate-600">{f.label}</div>
-                                  <div className="mt-1 text-sm font-semibold text-slate-900 break-words">
+                                <div key={f.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                  <div className="text-xs font-semibold text-gray-600">{f.label}</div>
+                                  <div className="mt-1 text-sm font-semibold text-gray-900 break-words">
                                     {formatAnswer(f, (answers as any)[f.key]) || '-'}
                                   </div>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <div className="mt-3 text-sm text-slate-600">Geen form velden gevonden.</div>
+                            <div className="mt-3 text-sm text-gray-600">Geen form velden gevonden.</div>
                           )}
                         </div>
                       </div>
@@ -1694,19 +1819,19 @@ export default function AmproAdminPage() {
                     return (
                       <div className="space-y-4">
                         <div>
-                          <h2 className="text-xl font-bold text-slate-900">Member verwijderen</h2>
-                          <p className="mt-1 text-sm text-slate-600">Deze actie kan je niet ongedaan maken.</p>
+                          <h2 className="text-xl font-bold text-gray-900">Member verwijderen</h2>
+                          <p className="mt-1 text-sm text-gray-600">Deze actie kan je niet ongedaan maken.</p>
                         </div>
 
-                        <p className="text-sm text-slate-700">
+                        <p className="text-sm text-gray-700">
                           Je staat op het punt om de inschrijving te verwijderen voor <span className="font-semibold">{name}</span> ({perfTitle}).
                         </p>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-sm font-semibold text-slate-900">Typ DELETE om te bevestigen</div>
+                        <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                          <div className="text-sm font-semibold text-gray-900">Typ DELETE om te bevestigen</div>
                           <input
                             value={memberDeleteConfirm}
                             onChange={(e) => setMemberDeleteConfirm(e.target.value)}
-                            className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                            className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                             placeholder="DELETE"
                           />
                         </div>
@@ -1714,7 +1839,7 @@ export default function AmproAdminPage() {
                           <button
                             type="button"
                             onClick={() => setMemberDeleteOpen(false)}
-                            className="h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+                            className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
                           >
                             Annuleren
                           </button>
@@ -1722,7 +1847,7 @@ export default function AmproAdminPage() {
                             type="button"
                             disabled={!canDelete}
                             onClick={deleteMemberApplication}
-                            className="h-11 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-11 rounded-3xl bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Verwijderen
                           </button>
@@ -1737,13 +1862,13 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Programma’s</h1>
-                    <p className="mt-1 text-sm text-slate-600">Beheer programma’s (performances & workshops).</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Programma’s</h1>
+                    <p className="mt-1 text-sm text-gray-600">Beheer programma’s (performances & workshops).</p>
                   </div>
                   <button
                     type="button"
                     onClick={openCreateProgrammaModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     Nieuw programma
@@ -1757,8 +1882,8 @@ export default function AmproAdminPage() {
                     placeholder="Zoek programma’s…"
                   />
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                    <div className="text-sm font-semibold text-slate-900">Alle programma’s</div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                    <div className="text-md font-bold text-gray-900">Alle programma’s</div>
                     <div className="mt-4 grid gap-2">
                       {filteredProgrammas.map((p) => {
                         const type = String(p?.program_type || '').toLowerCase()
@@ -1768,17 +1893,17 @@ export default function AmproAdminPage() {
                         return (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3"
+                            className="flex items-center justify-between gap-4 rounded-3xl border border-gray-200 px-4 py-3"
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="text-sm font-semibold text-slate-900 truncate">{p.title}</div>
+                                <div className="text-sm font-semibold text-gray-900 truncate">{p.title}</div>
                                 <span className="shrink-0 inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-800">
                                   {typeLabel}
                                 </span>
                               </div>
 
-                              <div className="mt-1 text-xs text-slate-600">
+                              <div className="mt-1 text-xs text-gray-600">
                                 {locationName ? `Location: ${locationName}` : null}
                                 {locationName && (p.region || p.performance_dates?.length || p.rehearsal_period_start || p.rehearsal_period_end || p.application_deadline)
                                   ? ' • '
@@ -1812,8 +1937,17 @@ export default function AmproAdminPage() {
                               <ActionIcon
                                 title="Weergeven"
                                 icon={Eye}
+                                variant="muted"
+                                className="hover:text-blue-600"
                                 onClick={() => router.push(`/ampro/programmas/${encodeURIComponent(p.id)}`)}
                                 aria-label="Weergeven"
+                              />
+                              <ActionIcon
+                                title="Verwijderen"
+                                icon={Trash2}
+                                variant="danger"
+                                onClick={() => deleteProgram(String(p.id))}
+                                aria-label="Verwijderen"
                               />
                             </div>
                           </div>
@@ -1821,7 +1955,7 @@ export default function AmproAdminPage() {
                       })}
 
                       {filteredProgrammas.length === 0 ? (
-                        <div className="text-sm text-slate-600">Geen programma’s gevonden.</div>
+                        <div className="text-sm text-gray-600">Geen programma’s gevonden.</div>
                       ) : null}
                     </div>
                   </div>
@@ -1833,43 +1967,86 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Forms</h1>
-                    <p className="mt-1 text-sm text-slate-600">Maak en beheer inschrijfformulieren.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Forms</h1>
+                    <p className="mt-1 text-sm text-gray-600">Maak en beheer inschrijfformulieren.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
+                      setEditingFormId(null)
                       setNewFormName('')
                       setNewFormFields([makeEmptyFieldDraft()])
                       setFormModalOpen(true)
                     }}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     Nieuwe form
                   </button>
                 </div>
 
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-                  <div className="text-sm font-semibold text-slate-900">Gemaakte forms</div>
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="text-md font-semibold text-gray-900">Gemaakte forms</div>
                   <div className="mt-4 grid gap-2">
                     {forms.map((f) => {
                       const count = Array.isArray((f as any)?.fields_json) ? ((f as any).fields_json as any[]).length : 0
                       return (
                         <div
                           key={f.id}
-                          className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3"
+                          className="flex items-center justify-between gap-4 rounded-3xl border border-gray-200 px-4 py-3"
                         >
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-slate-900 truncate">{f.name}</div>
-                            <div className="mt-1 text-xs text-slate-600">Velden: {count}</div>
+                            <div className="text-sm font-semibold text-gray-900 truncate">{f.name}</div>
+                            <div className="mt-1 text-xs text-gray-600">Velden: {count}</div>
                           </div>
-                          <div className="text-xs text-slate-500 shrink-0">{String(f.id)}</div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <ActionIcon
+                              title="Bewerk"
+                              icon={Edit2}
+                              variant="primary"
+                              onClick={() => {
+                                // open modal in edit mode
+                                setEditingFormId(String(f.id))
+                                setNewFormName(String(f.name || ''))
+                                const rawFields = Array.isArray((f as any)?.fields_json) ? ((f as any).fields_json as any[]) : []
+                                const mapped: FormFieldDraft[] = rawFields.map((rf) => ({
+                                  id: makeId(),
+                                  label: String(rf.label || ''),
+                                  type: (rf.type as any) || 'text',
+                                  required: Boolean(rf.required),
+                                  placeholder: String(rf.placeholder || '') || '',
+                                  options: Array.isArray(rf.options)
+                                    ? rf.options.map((o: any) => ({ id: makeId(), label: String(o.label || ''), value: String(o.value || '') }))
+                                    : [{ id: makeId(), label: '', value: '' }],
+                                }))
+                                setNewFormFields(mapped.length ? mapped : [makeEmptyFieldDraft()])
+                                setFormModalOpen(true)
+                              }}
+                              aria-label="Bewerk"
+                            />
+                            <ActionIcon
+                              title="Verwijderen"
+                              icon={Trash2}
+                              variant="danger"
+                              onClick={async () => {
+                                try {
+                                  if (!confirm(`Weet je zeker dat je het formulier "${String(f.name || '')}" wilt verwijderen?`)) return
+                                  const { error } = await supabase.from('ampro_forms').delete().eq('id', f.id)
+                                  if (error) throw error
+                                  await refresh()
+                                  showSuccess('Form verwijderd')
+                                } catch (e: any) {
+                                  showError(e?.message || 'Kon form niet verwijderen')
+                                }
+                              }}
+                              aria-label="Verwijderen"
+                            />
+                          </div>
                         </div>
                       )
                     })}
 
-                    {forms.length === 0 ? <div className="text-sm text-slate-600">Nog geen forms.</div> : null}
+                    {forms.length === 0 ? <div className="text-sm text-gray-600">Nog geen forms.</div> : null}
                   </div>
                 </div>
               </>
@@ -1879,13 +2056,13 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Notes</h1>
-                    <p className="mt-1 text-sm text-slate-600">Toon informatie aan ingeschreven (accepted) users.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Notes</h1>
+                    <p className="mt-1 text-sm text-gray-600">Toon informatie aan ingeschreven (accepted) users.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setNoteModalOpen(true)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     Nieuwe note
@@ -1898,13 +2075,13 @@ export default function AmproAdminPage() {
                     .map((p) => {
                       const notes = updatesByProgramId[String(p.id)] || []
                       return (
-                        <div key={p.id} className="rounded-2xl border border-slate-200 bg-white p-6">
-                          <div className="text-sm font-semibold text-slate-900">{p.title}</div>
+                        <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
+                          <div className="text-sm font-semibold text-gray-900">{p.title}</div>
                           <div className="mt-4 grid gap-2">
                             {notes.map((u: any) => (
-                              <div key={u.id} className="rounded-xl border border-slate-200 p-4">
-                                <div className="mt-1 text-sm font-semibold text-slate-900">{u.title}</div>
-                                <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{u.body}</div>
+                              <div key={u.id} className="rounded-3xl border border-gray-200 p-4">
+                                <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
+                                <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
                               </div>
                             ))}
                           </div>
@@ -1913,39 +2090,39 @@ export default function AmproAdminPage() {
                     })}
 
                   {unknownProgramUpdates.length ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                      <div className="text-sm font-semibold text-slate-900">Onbekend programma</div>
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                      <div className="text-sm font-semibold text-gray-900">Onbekend programma</div>
                       <div className="mt-4 grid gap-2">
                         {unknownProgramUpdates.map((u: any) => (
-                          <div key={u.id} className="rounded-xl border border-slate-200 p-4">
-                            <div className="text-xs text-slate-500">{String(u.performance_id || '')}</div>
-                            <div className="mt-1 text-sm font-semibold text-slate-900">{u.title}</div>
-                            <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{u.body}</div>
+                          <div key={u.id} className="rounded-3xl border border-gray-200 p-4">
+                            <div className="text-xs text-gray-500">{String(u.performance_id || '')}</div>
+                            <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
+                            <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
                           </div>
                         ))}
                       </div>
                     </div>
                   ) : null}
 
-                  {updates.length === 0 ? <div className="text-sm text-slate-600">Nog geen notes.</div> : null}
+                  {updates.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
                 </div>
               </>
             ) : null}
 
             {active === 'availability' ? (
               <>
-                <h1 className="text-2xl font-bold text-slate-900">Beschikbaarheid</h1>
-                <p className="mt-1 text-sm text-slate-600">Vraag beschikbaarheid op per programma en bekijk antwoorden.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Beschikbaarheid</h1>
+                <p className="mt-1 text-sm text-gray-600">Vraag beschikbaarheid op per programma en bekijk antwoorden.</p>
 
                 <div className="mt-6 grid gap-4">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6">
                     <div className="grid gap-3">
-                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                      <label className="grid gap-1 text-sm font-medium text-gray-700">
                         Programma
                         <select
                           value={availabilityPerformanceId}
                           onChange={(e) => setAvailabilityPerformanceId(e.target.value)}
-                          className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                          className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                         >
                           {performances.map((p: any) => (
                             <option key={String(p.id)} value={String(p.id)}>
@@ -1955,57 +2132,78 @@ export default function AmproAdminPage() {
                         </select>
                       </label>
 
-                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                         <input
                           type="checkbox"
                           checked={availabilityVisible}
                           onChange={(e) => setAvailabilityVisible(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300"
+                          className="h-4 w-4 rounded border-gray-300"
                         />
                         Zichtbaar voor users
                       </label>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                           <input
                             type="checkbox"
                             checked={availabilityLocked}
                             onChange={(e) => setAvailabilityLocked(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300"
+                            className="h-4 w-4 rounded border-gray-300"
                           />
-                          Vergrendeld (user kan niet aanpassen)
+                          Vergrendel (user kan niet meer aanpassen)
                         </label>
 
-                        <label className="grid gap-1 text-sm font-medium text-slate-700">
+                        <label className="grid gap-1 text-sm font-medium text-gray-700">
                           Vergrendel na datum (optioneel)
                           <input
                             value={availabilityLockAt}
                             onChange={(e) => setAvailabilityLockAt(e.target.value)}
                             placeholder="dd/mm/jjjj"
-                            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                            className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                           />
                         </label>
                       </div>
 
-                      <label className="grid gap-1 text-sm font-medium text-slate-700">
+                      <label className="grid gap-1 text-sm font-medium text-gray-700">
                         Data (1 per lijn of komma)
                         <textarea
                           value={availabilityDatesText}
                           onChange={(e) => setAvailabilityDatesText(e.target.value)}
                           placeholder="dd/mm/jjjj"
-                          className="min-h-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                         />
                       </label>
 
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-slate-900">Users (accepted)</div>
+                      <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-gray-900">Users (accepted)</div>
+                          <div>
+                            {acceptedUserIdsForSelectedPerformance.length > 0 ? (
+                              (() => {
+                                const allSelected = acceptedUserIdsForSelectedPerformance.every((id) => availabilitySelectedUserIds.includes(String(id)));
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (allSelected) setAvailabilitySelectedUserIds([])
+                                      else setAvailabilitySelectedUserIds(Array.from(new Set(acceptedUserIdsForSelectedPerformance.map(String))))
+                                    }}
+                                    className="text-sm font-medium text-gray-600 hover:text-gray-900"
+                                  >
+                                    {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
+                                  </button>
+                                )
+                              })()
+                            ) : null}
+                          </div>
+                        </div>
                         <div className="mt-3 grid gap-2">
                           {acceptedUserIdsForSelectedPerformance.map((uid) => {
                             const profile = profilesByUserId[String(uid)]
                             const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(uid)
                             const checked = availabilitySelectedUserIds.includes(String(uid))
                             return (
-                              <label key={uid} className="flex items-center gap-2 text-sm text-slate-700">
+                              <label key={uid} className="flex items-center gap-2 text-sm text-gray-700">
                                 <input
                                   type="checkbox"
                                   checked={checked}
@@ -2018,14 +2216,14 @@ export default function AmproAdminPage() {
                                       return Array.from(set)
                                     })
                                   }}
-                                  className="h-4 w-4 rounded border-slate-300"
+                                  className="h-4 w-4 rounded border-gray-300"
                                 />
                                 <span className="truncate">{name}</span>
                               </label>
                             )
                           })}
                           {acceptedUserIdsForSelectedPerformance.length === 0 ? (
-                            <div className="text-sm text-slate-600">Nog geen accepted users in roster voor dit programma.</div>
+                            <div className="text-sm text-gray-600">Nog geen accepted users in roster voor dit programma.</div>
                           ) : null}
                         </div>
                       </div>
@@ -2035,7 +2233,7 @@ export default function AmproAdminPage() {
                           type="button"
                           onClick={saveAvailabilityConfig}
                           disabled={savingAvailability}
-                          className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+                          className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
                             savingAvailability ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
                         >
@@ -2045,35 +2243,35 @@ export default function AmproAdminPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                    <div className="text-sm font-semibold text-slate-900">Overzicht</div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                    <div className="text-sm font-semibold text-gray-900">Overzicht</div>
                     <div className="mt-4 grid gap-3">
                       {availabilityRequestId ? (
                         availabilityOverview.map((d) => (
-                          <div key={d.day} className="rounded-xl border border-slate-200 p-4">
-                            <div className="text-sm font-semibold text-slate-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                          <div key={d.day} className="rounded-3xl border border-gray-200 p-4">
+                            <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
                             <div className="mt-3 grid gap-2">
                               {d.rows.map((r) => {
                                 const profile = profilesByUserId[String(r.user_id)]
                                 const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(r.user_id)
                                 return (
-                                  <div key={String(r.user_id)} className="rounded-lg border border-slate-200 px-3 py-2">
+                                  <div key={String(r.user_id)} className="rounded-2xl border border-gray-200 px-3 py-2">
                                     <div className="flex items-center justify-between gap-3">
-                                      <div className="text-sm font-semibold text-slate-900 truncate">{name}</div>
-                                      <div className="text-xs font-semibold text-slate-700">{availabilityStatusLabel(r.status)}</div>
+                                      <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
+                                      <div className="text-xs font-semibold text-gray-700">{availabilityStatusLabel(r.status)}</div>
                                     </div>
-                                    {r.comment ? <div className="mt-1 text-xs text-slate-600 whitespace-pre-wrap">{r.comment}</div> : null}
+                                    {r.comment ? <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{r.comment}</div> : null}
                                   </div>
                                 )
                               })}
                               {d.rows.length === 0 ? (
-                                <div className="text-sm text-slate-600">Geen users gekoppeld aan deze datum.</div>
+                                <div className="text-sm text-gray-600">Geen users gekoppeld aan deze datum.</div>
                               ) : null}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="text-sm text-slate-600">Nog geen beschikbaarheidsvraag ingesteld.</div>
+                        <div className="text-sm text-gray-600">Nog geen beschikbaarheidsvraag ingesteld.</div>
                       )}
                     </div>
                   </div>
@@ -2085,27 +2283,27 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Locaties</h1>
-                    <p className="mt-1 text-sm text-slate-600">Beheer locaties en koppel ze aan programma’s.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Locaties</h1>
+                    <p className="mt-1 text-sm text-gray-600">Beheer locaties en koppel ze aan programma’s.</p>
                   </div>
                   <button
                     type="button"
                     onClick={openCreateLocationModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     Nieuwe locatie
                   </button>
                 </div>
 
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-                  <div className="text-sm font-semibold text-slate-900">Alle locaties</div>
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="text-sm font-semibold text-gray-900">Alle locaties</div>
                   <div className="mt-4 grid gap-2">
                     {locations.map((l) => (
-                      <div key={l.id} className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
+                      <div key={l.id} className="flex items-start justify-between gap-4 rounded-3xl border border-gray-200 px-4 py-3">
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-slate-900">{l.name}</div>
-                          {l.address ? <div className="mt-1 text-xs text-slate-600 whitespace-pre-wrap">{l.address}</div> : null}
+                          <div className="text-sm font-semibold text-gray-900">{l.name}</div>
+                          {l.address ? <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{l.address}</div> : null}
                         </div>
                         <div className="shrink-0">
                           <ActionIcon
@@ -2119,7 +2317,7 @@ export default function AmproAdminPage() {
                       </div>
                     ))}
 
-                    {locations.length === 0 ? <div className="text-sm text-slate-600">Nog geen locaties.</div> : null}
+                    {locations.length === 0 ? <div className="text-sm text-gray-600">Nog geen locaties.</div> : null}
                   </div>
                 </div>
               </>
@@ -2127,61 +2325,139 @@ export default function AmproAdminPage() {
 
             {active === 'applications' ? (
               <>
-                <h1 className="text-2xl font-bold text-slate-900">Applicaties</h1>
-                <p className="mt-1 text-sm text-slate-600">Accepteer of wijs inschrijvingen af.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Applicaties</h1>
+                <p className="mt-1 text-sm text-gray-600">Accepteer of wijs inschrijvingen af.</p>
 
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
                   <div className="grid gap-2">
-                    {applications.map((a) => {
-                      const userId = String(a.user_id)
-                      const profile = profilesByUserId[userId]
-                      const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
+                    {(() => {
+                      if (!applications || applications.length === 0) return <div className="text-sm text-gray-600">Nog geen inschrijvingen.</div>
 
-                      return (
-                        <div key={a.id} className="grid gap-2 rounded-xl border border-slate-200 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-900 truncate">{name}</div>
-                              <div className="text-xs text-slate-600">
-                                Programma: {performanceTitleById[String(a.performance_id)] || String(a.performance_id)}
+                      const appsByProgram: Record<string, any[]> = {}
+                      for (const a of applications) {
+                        const pid = String(a.performance_id || '')
+                        if (!appsByProgram[pid]) appsByProgram[pid] = []
+                        appsByProgram[pid].push(a)
+                      }
+
+                      return Object.keys(appsByProgram).map((pid) => {
+                        const group = appsByProgram[pid]
+                        const title = performanceTitleById[pid] || pid
+                        const expanded = Boolean(appsExpandedByProgram[pid] ?? true)
+
+                        return (
+                          <div key={pid} className="rounded-3xl border border-gray-200 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-gray-900">{title}</div>
+                                <div className="text-xs text-gray-600">{group.length} inschrijving(en)</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAppsExpandedByProgram((prev) => ({ ...prev, [pid]: !expanded }))}
+                                  className="rounded-full p-1 text-gray-600 hover:text-gray-900"
+                                  aria-expanded={expanded}
+                                >
+                                  {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                </button>
+                                {(() => {
+                                  const hasChanges = group.some((a) => {
+                                    const staged = stagedStatuses[String(a.id)]
+                                    return staged !== undefined && String(staged) !== String(a.status)
+                                  })
+                                  const saving = Boolean(savingGroup[pid])
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => saveGroupStatuses(pid)}
+                                      disabled={!hasChanges || saving}
+                                      className={`inline-flex h-9 items-center gap-2 rounded-3xl px-3 text-sm font-semibold transition-colors ${
+                                        hasChanges ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-600'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                      {saving ? 'Opslaan…' : 'Opslaan'}
+                                    </button>
+                                  )
+                                })()}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <div className="text-xs font-semibold text-slate-700">{String(a.status)}</div>
-                              <ActionIcon
-                                title="Bekijk gegevens"
-                                icon={Eye}
-                                variant="primary"
-                                onClick={() => openMemberDetail(a)}
-                                aria-label="Bekijk gegevens"
-                              />
-                            </div>
-                          </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setStatus(a.id, 'accepted')}
-                              className="h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              onClick={() => setStatus(a.id, 'maybe')}
-                              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900"
-                            >
-                              Twijfel
-                            </button>
-                            <button
-                              onClick={() => setStatus(a.id, 'rejected')}
-                              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900"
-                            >
-                              Reject
-                            </button>
+                            {expanded ? (
+                              <div className="mt-3 grid gap-2">
+                                {group.map((a) => {
+                                  const userId = String(a.user_id)
+                                  const profile = profilesByUserId[userId]
+                                  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
+
+                                  return (
+                                    <div key={a.id} className="grid gap-2 rounded-3xl border border-gray-200 p-4">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
+                                          <div className="text-xs text-gray-600">Programma: {title}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <div className="text-xs font-semibold text-gray-700">{String(stagedStatuses[String(a.id)] ?? a.status)}</div>
+                                          <ActionIcon
+                                            title="Bekijk gegevens"
+                                            icon={Eye}
+                                            variant="muted"
+                                            className="hover:text-blue-600"
+                                            onClick={() => openMemberDetail(a)}
+                                            aria-label="Bekijk gegevens"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        {(() => {
+                                          const current = String(stagedStatuses[String(a.id)] ?? a.status)
+                                          return (
+                                            <>
+                                              <button
+                                                onClick={() => stageStatus(a.id, 'accepted')}
+                                                className={`h-10 rounded-3xl px-3 text-xs font-semibold transition-colors ${
+                                                  current === 'accepted'
+                                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                                    : 'border border-gray-200 bg-white text-gray-900'
+                                                }`}
+                                              >
+                                                Accept
+                                              </button>
+                                              <button
+                                                onClick={() => stageStatus(a.id, 'maybe')}
+                                                className={`h-10 rounded-3xl px-3 text-xs font-semibold transition-colors ${
+                                                  current === 'maybe'
+                                                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                                    : 'border border-gray-200 bg-white text-gray-900'
+                                                }`}
+                                              >
+                                                Twijfel
+                                              </button>
+                                              <button
+                                                onClick={() => stageStatus(a.id, 'rejected')}
+                                                className={`h-10 rounded-3xl px-3 text-xs font-semibold transition-colors ${
+                                                  current === 'rejected'
+                                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                                    : 'border border-gray-200 bg-white text-gray-900'
+                                                }`}
+                                              >
+                                                Reject
+                                              </button>
+                                            </>
+                                          )
+                                        })()}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
                           </div>
-                        </div>
-                      )
-                    })}
-                    {applications.length === 0 ? <div className="text-sm text-slate-600">Nog geen inschrijvingen.</div> : null}
+                        )
+                      })
+                    })()}
                   </div>
                 </div>
               </>
@@ -2189,21 +2465,21 @@ export default function AmproAdminPage() {
 
             {active === 'members' ? (
               <>
-                <h1 className="text-2xl font-bold text-slate-900">Members</h1>
-                <p className="mt-1 text-sm text-slate-600">Overzicht van alle inschrijvingen per voorstelling.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Members</h1>
+                <p className="mt-1 text-sm text-gray-600">Overzicht van alle inschrijvingen per voorstelling.</p>
 
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="text-left text-xs font-semibold text-slate-600">
+                        <tr className="text-left text-xs font-semibold text-gray-600">
                           <th className="py-2 pr-4">Danser</th>
                           <th className="py-2 pr-4">Voorstelling</th>
                           <th className="py-2 pr-4">Status</th>
                           <th className="py-2 pr-4"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
+                      <tbody className="divide-y divide-gray-200">
                         {applications.map((a) => {
                           const userId = String(a.user_id)
                           const profile = profilesByUserId[userId]
@@ -2211,15 +2487,16 @@ export default function AmproAdminPage() {
                           const perfTitle = performanceTitleById[String(a.performance_id)] || String(a.performance_id)
 
                           return (
-                            <tr key={a.id} className="text-slate-800">
-                              <td className="py-3 pr-4 font-semibold text-slate-900">{name}</td>
+                            <tr key={a.id} className="text-gray-800">
+                              <td className="py-3 pr-4 font-semibold text-gray-900">{name}</td>
                               <td className="py-3 pr-4">{perfTitle}</td>
                               <td className="py-3 pr-4">{String(a.status)}</td>
                               <td className="py-3 pr-4">
                                 <div className="flex items-center justify-end gap-2">
                                   <ActionIcon
                                     icon={Eye}
-                                    variant="primary"
+                                    variant="muted"
+                                    className="hover:text-blue-600"
                                     title="Bekijk gegevens"
                                     onClick={() => openMemberDetail(a)}
                                   />
@@ -2236,7 +2513,7 @@ export default function AmproAdminPage() {
                         })}
                         {applications.length === 0 ? (
                           <tr>
-                            <td className="py-4 text-slate-600" colSpan={4}>
+                            <td className="py-4 text-gray-600" colSpan={4}>
                               Nog geen members.
                             </td>
                           </tr>
