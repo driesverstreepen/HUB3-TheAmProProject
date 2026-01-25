@@ -123,15 +123,22 @@ body.dark .min-h-screen {
 body.dark .bg-white,
 body.dark .bg-slate-50,
 body.dark .bg-slate-100 {
-  /* Card/section background: subtle vertical gradient from slightly lighter dark gray to deep surface */
-  background-image: linear-gradient(180deg, rgba(12, 12, 14, 0.92), rgba(4,6,8,0.98)) !important;
   /* Slightly darker surface tint for desktop interface sections */
-  background-color: #050f18 !important;
+  background-color: var(--color-zinc-950) !important;
   /* No lift/shadow in dark mode (flat UI) */
   box-shadow: none !important;
   border: 1px solid rgba(255,255,255,0.06) !important;
   transition: none;
 }
+.dark .bg-gray-50, body.dark .bg-gray-50 { background-color: color-mix(in srgb, var(--color-gray-950), transparent 90%) !important; }
+.dark .bg-gray-100, body.dark .bg-gray-100 { background-color: color-mix(in srgb, var(--color-gray-600), transparent 90%) !important; }
+.dark .bg-gray-200, body.dark .bg-gray-200 { background-color: color-mix(in srgb, var(--color-gray-700), transparent 90%) !important; }
+
+.dark .bg-green-50, body.dark .bg-green-50 { background-color: color-mix(in srgb, var(--color-green-600), transparent 90%) !important; }
+.dark .bg-amber-50, body.dark .bg-amber-50 { background-color: color-mix(in srgb, var(--color-amber-600), transparent 90%) !important; }
+.dark .bg-blue-50, body.dark .bg-blue-50 { background-color: color-mix(in srgb, var(--color-blue-400), transparent 90%) !important; }
+.dark .bg-blue-100, body.dark .bg-blue-100 { background-color: color-mix(in srgb, var(--color-blue-600), transparent 90%) !important; }
+
 
 /* Remove Tailwind shadows in dark mode across interface pages */
 body.dark .shadow,
@@ -195,19 +202,27 @@ body.dark .nav-surface {
 
 /* Text color adjustments */
 /* Primary */
-body.dark .text-gray-900, body.dark .text-slate-900, .dark .text-gray-900, .dark .text-slate-900 { color: #e6eef8 !important; }
-/* Strong secondary */
-body.dark .text-gray-800, body.dark .text-slate-800, .dark .text-gray-800, .dark .text-slate-800 { color: #cbd5e1 !important; }
-/* Default secondary (match UserTopNav desktop inactive tabs) */
-body.dark .text-gray-700, body.dark .text-slate-700, .dark .text-gray-700, .dark .text-slate-700 { color: #94a3b8 !important; }
-body.dark .text-gray-600, body.dark .text-slate-600, .dark .text-gray-600, .dark .text-slate-600 { color: #94a3b8 !important; }
-body.dark .text-gray-500, body.dark .text-slate-500, .dark .text-gray-500, .dark .text-slate-500 { color: #94a3b8 !important; }
+body.dark .text-gray-900, body.dark .text-slate-900, .dark .text-gray-900, .dark .text-slate-900 { color: var(--color-gray-200) !important; }
+body.dark .text-gray-700, body.dark .text-slate-700, .dark .text-gray-700, .dark .text-slate-700 { color: var(--color-gray-300) !important; }
+body.dark .text-gray-600, body.dark .text-slate-600, .dark .text-gray-600, .dark .text-slate-600 { color: var(--color-gray-500) !important; }
+body.dark .text-gray-500, body.dark .text-slate-500, .dark .text-gray-500, .dark .text-slate-500 { color: var(--color-gray-400) !important; }
+body.dark .text-gray-50, .dark .text-gray-50 { color: var(--color-gray-50) !important; }
+
+body.dark .text-green-800, .dark .text-green-800 { color: color-mix(in srgb, var(--color-green-200), transparent 40%) !important; }
+body.dark .text-amber-800, .dark .text-amber-800 { color: color-mix(in srgb, var(--color-amber-200), transparent 40%) !important; }
+body.dark .text-blue-800, .dark .text-blue-800 { color: color-mix(in srgb, var(--color-blue-200), transparent 40%) !important; }
+body.dark .text-gray-800, .dark .text-gray-800 { color: color-mix(in srgb, var(--color-gray-200), transparent 40%) !important; }
+
 
 /* Border color adjustments */
-body.dark .border-gray-200, body.dark .border-slate-200, body.dark .border-slate-100, .dark .border-gray-200, .dark .border-slate-200, .dark .border-slate-100 { border-color: rgba(255,255,255,0.06) !important; }
+body.dark .border-gray-200, body.dark .border-slate-200, body.dark .border-slate-100, .dark .border-gray-200, .dark .border-slate-200, .dark .border-slate-100 { border-color: color-mix(in srgb, var(--color-gray-400), transparent 80%) !important; }
+body.dark .border-green-200, .dark .border-green-200 { border-color: color-mix(in srgb, var(--color-green-200), transparent 80%) !important; }
+body.dark .border-amber-200, .dark .border-amber-200 { border-color: color-mix(in srgb, var(--color-amber-200), transparent 80%) !important; }
+
 
 /* Hover backgrounds used in navigation and buttons */
-body.dark .hover\:bg-gray-100:hover, .dark .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.03) !important; }
+body.dark .hover\:bg-gray-100:hover, .dark .hover\:bg-gray-100:hover { background-color: color-mix(in srgb, var(--color-gray-200), transparent 80%) !important; }
+body.dark .hover\:bg-gray-50:hover, .dark .hover\:bg-gray-50:hover { background-color: color-mix(in srgb, var(--color-gray-200), transparent 90%) !important; }
 body.dark .hover\:bg-red-50:hover, .dark .hover\:bg-red-50:hover { background-color: rgba(255,0,0,0.03) !important; }
 
 /* Buttons / prominent actions — keep the blue gradient but with slightly brighter text */

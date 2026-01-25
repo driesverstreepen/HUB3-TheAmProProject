@@ -485,7 +485,7 @@ export default function AmproMijnProjectenDetailPage() {
                 <div className="flex items-center gap-3">
                   <div className="text-sm font-semibold">{priceLabel || 'Prijs niet ingesteld'}</div>
                   {hasPaid ? (
-                    <button type="button" disabled className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-green-100 text-green-600">
+                    <button type="button" disabled className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-green-50 border border-green-200 text-green-800">
                       Betaald
                     </button>
                   ) : adminPaymentUrl ? (

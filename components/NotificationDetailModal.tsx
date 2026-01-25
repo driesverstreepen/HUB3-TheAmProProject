@@ -21,6 +21,10 @@ export default function NotificationDetailModal({ notification, onClose, onRefre
     ? (notification.action_data?.program_id as string | undefined)
     : undefined
 
+  const openUrl = (notification.action_type === 'open_url')
+    ? (notification.action_data?.url as string | undefined)
+    : undefined
+
   const handleTeacherInvitationResponse = async (action: 'accept' | 'decline') => {
     setProcessing(true)
     try {
@@ -246,6 +250,21 @@ export default function NotificationDetailModal({ notification, onClose, onRefre
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               Inschrijven
+            </button>
+          </div>
+        )}
+
+        {/* Generic open-url action (used by AMPRO notifications) */}
+        {openUrl && (
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                onClose()
+                router.push(openUrl)
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Openen
             </button>
           </div>
         )}

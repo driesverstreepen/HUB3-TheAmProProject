@@ -173,7 +173,7 @@ export default function AmproMobileTopNav() {
             <Menu className="w-6 h-6" />
           </button>
 
-          {isLoggedIn ? <NotificationBell iconSize={20} /> : <div className="w-10" />}
+          {isLoggedIn ? <NotificationBell scope="ampro" iconSize={20} /> : <div className="w-10" />}
         </div>
       </div>
 

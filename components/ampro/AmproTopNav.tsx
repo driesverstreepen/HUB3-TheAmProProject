@@ -142,7 +142,7 @@ export default function AmproTopNav() {
                     </button>
                   ) : null}
 
-                  <NotificationBell />
+                  <NotificationBell scope="ampro" />
 
                   <button
                     onClick={() => router.push('/ampro/profile')}

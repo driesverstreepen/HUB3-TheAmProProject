@@ -28,7 +28,7 @@ export function MobileTabBar() {
   const visibleTabs = tabs.filter((t) => !t.featureKey || !isHidden(t.featureKey, false))
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
       <ul className="mx-auto grid max-w-xl grid-cols-4">
         {visibleTabs.map((t) => {
           const active = pathname === t.href || (t.href !== '/dashboard' && pathname?.startsWith(t.href))
@@ -42,11 +42,11 @@ export function MobileTabBar() {
                     'flex h-12 items-center justify-center text-sm transition-colors cursor-not-allowed opacity-60 ' +
                     (active
                       ? 'text-sky-600 font-medium'
-                      : 'text-slate-600')
+                      : 'text-gray-600')
                   }
                 >
                   <span>{t.label}</span>
-                  <span className="ml-2 text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{badge}</span>
+                  <span className="ml-2 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">{badge}</span>
                 </div>
               ) : (
                 <Link
@@ -55,7 +55,7 @@ export function MobileTabBar() {
                     'flex h-12 items-center justify-center text-sm transition-colors ' +
                     (active
                       ? 'text-sky-600 font-medium'
-                      : 'text-slate-600 hover:text-slate-900')
+                      : 'text-gray-600 hover:text-gray-900')
                   }
                 >
                   {t.label}

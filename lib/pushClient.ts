@@ -80,8 +80,25 @@ export async function deleteSubscription(endpoint: string) {
     body: JSON.stringify({ endpoint }),
   })
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error || `Failed to delete subscription (${res.status})`)
+  if (res.ok) return
+
+  // Some deployments/proxies don't allow DELETE and return 404/405.
+  if (res.status === 404 || res.status === 405) {
+    const fallback = await fetch('/api/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpoint }),
+    })
+
+    if (fallback.ok) return
+
+    const body = await fallback.json().catch(() => ({}))
+    throw new Error(body?.error || `Failed to delete subscription (${fallback.status})`)
   }
+
+  // If it's already gone, treat it as success.
+  if (res.status === 410) return
+
+  const body = await res.json().catch(() => ({}))
+  throw new Error(body?.error || `Failed to delete subscription (${res.status})`)
 }

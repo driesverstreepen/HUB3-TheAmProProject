@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from 'react'
-import { X, CheckCircle, Clock, AlertTriangle, Info, Check } from 'lucide-react'
+import Link from 'next/link'
+import { X, CheckCircle, Clock, AlertTriangle, Info, Check, Settings } from 'lucide-react'
 import { Notification } from '@/types/database'
 import { supabase } from '@/lib/supabase'
 import { Trash2 } from 'lucide-react'
@@ -14,9 +15,10 @@ interface NotificationsPanelProps {
   onClose: () => void
   onRefresh: () => void
   style?: React.CSSProperties
+  scope?: string
 }
 
-export default function NotificationsPanel({ notifications, onClose, onRefresh, style }: NotificationsPanelProps) {
+export default function NotificationsPanel({ notifications, onClose, onRefresh, style, scope }: NotificationsPanelProps) {
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [deleting, setDeleting] = useState(false)
   const { isArmed: isDeleteArmed, confirmOrArm: confirmOrArmDelete } = useTwoStepConfirm<string>(4500)
@@ -25,12 +27,18 @@ export default function NotificationsPanel({ notifications, onClose, onRefresh, 
     switch (type) {
       case 'teacher_invitation':
         return <CheckCircle className="w-5 h-5 text-blue-600" />
+      case 'ampro_note':
+        return <Info className="w-5 h-5 text-blue-600" />
+      case 'ampro_correction':
+        return <AlertTriangle className="w-5 h-5 text-amber-600" />
+      case 'ampro_availability':
+        return <Clock className="w-5 h-5 text-gray-700" />
       case 'warning':
         return <AlertTriangle className="w-5 h-5 text-amber-600" />
       case 'info':
-        return <Info className="w-5 h-5 text-slate-600" />
+        return <Info className="w-5 h-5 text-gray-600" />
       default:
-        return <Info className="w-5 h-5 text-slate-600" />
+        return <Info className="w-5 h-5 text-gray-600" />
     }
   }
 
@@ -90,16 +98,27 @@ export default function NotificationsPanel({ notifications, onClose, onRefresh, 
 
   return (
     <>
-      <div style={style} className="w-[calc(100vw-16px)] max-w-sm bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div style={style} className="w-[calc(100vw-16px)] max-w-sm bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 p-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="t-h4 font-semibold">Meldingen</h3>
+        <div className="relative flex flex-wrap items-center justify-between gap-2 p-4 pr-12 border-b border-gray-200 bg-gray-50">
+          <h3 className="text-md font-semibold">Meldingen</h3>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <PushNotificationsToggle />
+            {scope === 'ampro' ? (
+              <Link
+                href="/ampro/profile/notifications"
+                onClick={() => onClose()}
+                aria-label="Notificatie-instellingen"
+                title="Instellingen"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <Settings size={16} />
+              </Link>
+            ) : null}
             {notifications.some(n => !n.read) && (
               <button
                 onClick={markAllAsRead}
-                className="t-caption font-medium text-blue-600 hover:text-blue-700"
+                className="text-sm font-medium text-blue-600 hover:text-blue-700"
               >
                 Alles als gelezen markeren
               </button>
@@ -125,36 +144,39 @@ export default function NotificationsPanel({ notifications, onClose, onRefresh, 
                   })
                 }
                 disabled={deleting}
-                className={`t-caption text-red-600 hover:text-red-700 font-medium ${
+                className={`text-sm text-red-600 hover:text-red-700 font-medium ${
                   isDeleteArmed('all') ? 'ring-2 ring-red-200 rounded px-1' : ''
                 }`}
               >
                 {isDeleteArmed('all') ? 'Bevestig' : 'Alles verwijderen'}
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-slate-600 rounded"
-            >
-              <X size={18} />
-            </button>
           </div>
+
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            aria-label="Sluiten"
+            title="Sluiten"
+          >
+            <X size={18} />
+          </button>
         </div>
 
   {/* Notifications List */}
         <div className="max-h-[calc(100vh-6rem)] overflow-y-auto">
           {notifications.length === 0 ? (
-            <div className="p-8 text-center t-bodySm">
-              <Info className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-              <p className="t-bodySm">Geen meldingen</p>
+            <div className="p-8 text-center text-sm">
+              <Info className="w-10 h-10 mx-auto mb-3 text-gray-500" />
+              <p className="text-sm font-semibold text-gray-500">Geen meldingen</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-gray-100">
               {notifications.map((notification) => (
                 <div key={notification.id} className="relative">
                   <button
                     onClick={() => handleNotificationClick(notification)}
-                    className={`w-full p-4 pr-10 text-left hover:bg-slate-50 transition-colors ${
+                    className={`w-full p-4 pr-10 text-left hover:bg-gray-50 transition-colors ${
                       !notification.read ? 'bg-blue-50' : ''
                     }`}
                   >
@@ -195,7 +217,7 @@ export default function NotificationsPanel({ notifications, onClose, onRefresh, 
                     }}
                     disabled={deleting}
                     aria-label="Verwijder notificatie"
-                    className={`absolute right-2 top-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:text-slate-600 ${
+                    className={`absolute right-2 top-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 ${
                       isDeleteArmed(`one:${notification.id}`) ? 'ring-2 ring-red-200 text-red-600' : ''
                     }`}
                     title={isDeleteArmed(`one:${notification.id}`) ? 'Klik opnieuw om te verwijderen' : 'Verwijderen'}

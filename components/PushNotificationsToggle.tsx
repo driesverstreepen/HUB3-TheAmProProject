@@ -77,7 +77,7 @@ export default function PushNotificationsToggle({ variant = 'link' }: PushNotifi
   }, [])
 
   if (!supported) {
-    return <span className="t-caption text-slate-500">{getUnsupportedMessage()}</span>
+    return <span className="t-caption text-gray-500">{getUnsupportedMessage()}</span>
   }
 
   const enable = async () => {
@@ -102,8 +102,24 @@ export default function PushNotificationsToggle({ variant = 'link' }: PushNotifi
 
       const sub = await getExistingSubscription()
       if (sub) {
-        await deleteSubscription(sub.endpoint)
-        await sub.unsubscribe()
+        let unsubOk = false
+        try {
+          await deleteSubscription(sub.endpoint)
+        } catch (e) {
+          // best-effort; we still unsubscribe locally below
+          console.warn('Failed to delete push subscription on server', e)
+        }
+
+        try {
+          unsubOk = await sub.unsubscribe()
+        } catch (e) {
+          console.warn('Failed to unsubscribe push subscription in browser', e)
+          unsubOk = false
+        }
+
+        if (!unsubOk) {
+          throw new Error('Kon push subscription niet uitschrijven op dit toestel')
+        }
       }
       setEnabled(false)
     } catch (e: any) {
@@ -121,7 +137,7 @@ export default function PushNotificationsToggle({ variant = 'link' }: PushNotifi
           disabled={loading}
           className={
             variant === 'button'
-              ? 'px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-sm font-medium text-blue-700 dark:text-blue-400 disabled:opacity-60'
+              ? 'px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/40 text-sm font-medium text-blue-700 dark:text-blue-400 disabled:opacity-60'
               : 't-caption font-medium text-blue-600 hover:text-blue-700 disabled:opacity-60'
           }
         >
@@ -133,8 +149,8 @@ export default function PushNotificationsToggle({ variant = 'link' }: PushNotifi
           disabled={loading}
           className={
             variant === 'button'
-              ? 'px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-sm font-medium text-slate-700 dark:text-slate-200 disabled:opacity-60'
-              : 't-caption font-medium text-slate-600 hover:text-slate-700 disabled:opacity-60'
+              ? 'px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/40 text-sm font-medium text-gray-700 dark:text-gray-200 disabled:opacity-60'
+              : 't-caption font-medium text-gray-500 hover:text-gray-700 disabled:opacity-60'
           }
         >
           {loading ? 'Even wachten…' : 'Pushmeldingen uitschakelen'}

@@ -235,6 +235,15 @@ export default function AmproProfilePage() {
           <h1 className="text-2xl font-bold text-gray-900">Mijn Profiel</h1>
           <p className="mt-1 text-sm text-gray-600">{email}</p>
 
+          <div className="mt-4">
+            <button
+              onClick={() => router.push('/ampro/profile/notifications')}
+              className="inline-flex h-10 items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              Notificatie-instellingen
+            </button>
+          </div>
+
           {nextPath ? (
             <div className="mt-4 text-sm text-gray-700">
               Vul je profiel volledig in om verder te gaan.

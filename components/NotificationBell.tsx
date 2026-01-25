@@ -4,18 +4,31 @@ import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 // theme handled via global CSS classes; explicit hook not required here
 import { Bell } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Notification } from '@/types/database'
 import NotificationsPanel from './NotificationsPanel'
 import { safeSelect } from '@/lib/supabaseHelpers'
 
-export default function NotificationBell({ iconSize = 16 }: { iconSize?: number }) {
+export default function NotificationBell({
+  iconSize = 16,
+  scope,
+}: {
+  iconSize?: number
+  scope?: string
+}) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showPanel, setShowPanel] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties | undefined>(undefined)
+  const pathname = usePathname()
   // theme hook not needed — colors derive from currentColor and global dark-mode class
+
+  useEffect(() => {
+    setShowPanel(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null
@@ -61,12 +74,10 @@ export default function NotificationBell({ iconSize = 16 }: { iconSize?: number 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return {}
 
-      const { data, error, missingTable } = await safeSelect(
-        supabase,
-        'notifications',
-        '*',
-        { user_id: user.id },
-      )
+      const filters: Record<string, any> = { user_id: user.id }
+      if (scope) filters.scope = scope
+
+      const { data, error, missingTable } = await safeSelect(supabase, 'notifications', '*', filters)
 
       if (missingTable) {
         setNotifications([])
@@ -164,6 +175,7 @@ export default function NotificationBell({ iconSize = 16 }: { iconSize?: number 
               notifications={notifications}
               onClose={() => setShowPanel(false)}
               onRefresh={loadNotifications}
+              scope={scope}
               style={panelStyle}
             />
           </div>

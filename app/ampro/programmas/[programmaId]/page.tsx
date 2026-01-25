@@ -181,35 +181,35 @@ export default function AmproProgrammaDetailPage() {
               {infoHasAny ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
-                  <div className="grid gap-3 text-sm text-gray-700">
+                  <div className="grid gap-3 text-sm text-gray-500">
                     {location ? (
                       <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
+                        <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
                         <div className="grid gap-1">
                           <div>
-                            <span className="text-gray-900">Locatie:</span> {location.name}
+                            <span className="text-gray-500">Locatie:</span> {location.name}
                           </div>
                           {location.address ? (
-                            <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
+                            <div className="text-xs text-gray-500 whitespace-pre-wrap">{location.address}</div>
                           ) : null}
                         </div>
                       </div>
                     ) : null}
                     {rehearsalLabel ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <Calendar className="h-4 w-4 text-gray-500" />
                         <span>Repetitie periode: {rehearsalLabel}</span>
                       </div>
                     ) : null}
                     {performanceDatesLabel ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <Calendar className="h-4 w-4 text-gray-500" />
                         <span>Voorstellingsdata: {performanceDatesLabel}</span>
                       </div>
                     ) : null}
                     {programma.application_deadline ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <Calendar className="h-4 w-4 text-gray-500" />
                         <span>Deadline: {formatDateOnlyFromISODate(programma.application_deadline)}</span>
                       </div>
                     ) : null}
@@ -220,7 +220,7 @@ export default function AmproProgrammaDetailPage() {
               {programma.description ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Beschrijving</h2>
-                  <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
+                  <p className="text-gray-500 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
                 </div>
               ) : null}
             </div>
@@ -231,7 +231,7 @@ export default function AmproProgrammaDetailPage() {
 
                 <div className="mb-4 p-4 bg-blue-50 border border-gray-200 rounded-3xl">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-gray-600">Status</span>
+                    <span className="font-semibold text-gray-900">Status</span>
                     <span className="flex items-center pr-4 text-xl font-bold text-gray-900">
                       {isClosed ? 'Closed' : 'Open'}
                     </span>
@@ -247,17 +247,10 @@ export default function AmproProgrammaDetailPage() {
                   type="button"
                   disabled={isClosed}
                   onClick={() => router.push(applyHref)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-3xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 mt-6 bg-blue-600 hover:bg-blue-700 text-gray-50 rounded-3xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Inschrijven
                 </button>
-
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="text-sm text-gray-600 space-y-2">
-                    <p>✓ Inschrijven via formulier</p>
-                    <p>✓ Beoordeling door de company</p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

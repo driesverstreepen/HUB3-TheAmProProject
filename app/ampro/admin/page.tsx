@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2, GripVertical } from 'lucide-react'
@@ -165,6 +165,30 @@ export default function AmproAdminPage() {
   const [updates, setUpdates] = useState<any[]>([])
   const [corrections, setCorrections] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
+
+  function clipNotificationMessage(value: string, maxLen = 140) {
+    const v = String(value || '').trim().replace(/\s+/g, ' ')
+    if (!v) return ''
+    if (v.length <= maxLen) return v
+    return `${v.slice(0, Math.max(0, maxLen - 1))}…`
+  }
+
+  async function broadcastAmproNotification(input: { kind: 'note' | 'correction' | 'availability'; performanceId: string; title: string; message: string }) {
+    try {
+      const resp = await fetch('/api/ampro/notifications/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: input.kind, performance_id: input.performanceId, title: input.title, message: input.message }),
+      })
+
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}))
+        console.warn('AMPRO broadcast failed', resp.status, json)
+      }
+    } catch (e) {
+      console.warn('AMPRO broadcast failed', e)
+    }
+  }
 
   const [inviteManageOpen, setInviteManageOpen] = useState(false)
   const [inviteManageProgram, setInviteManageProgram] = useState<{ id: string; title: string } | null>(null)
@@ -448,6 +472,7 @@ export default function AmproAdminPage() {
   const [availabilityPerformanceId, setAvailabilityPerformanceId] = useState('')
   const [availabilityRequestId, setAvailabilityRequestId] = useState<string | null>(null)
   const [availabilityVisible, setAvailabilityVisible] = useState(false)
+  const availabilityWasVisibleRef = useRef(false)
   const [availabilityLocked, setAvailabilityLocked] = useState(false)
   const [availabilityLockAt, setAvailabilityLockAt] = useState('')
   const [availabilityDatesText, setAvailabilityDatesText] = useState('')
@@ -476,6 +501,7 @@ export default function AmproAdminPage() {
     try {
       setAvailabilityRequestId(null)
       setAvailabilityVisible(false)
+      availabilityWasVisibleRef.current = false
       setAvailabilityLocked(false)
       setAvailabilityLockAt('')
       setAvailabilityDatesText('')
@@ -495,6 +521,7 @@ export default function AmproAdminPage() {
       if (!reqResp.data?.id) {
         setAvailabilityRequestId(null)
         setAvailabilityVisible(false)
+        availabilityWasVisibleRef.current = false
         setAvailabilityLocked(false)
         setAvailabilityLockAt('')
         setAvailabilityDatesText('')
@@ -505,7 +532,9 @@ export default function AmproAdminPage() {
 
       const requestId = String((reqResp.data as any).id)
       setAvailabilityRequestId(requestId)
-      setAvailabilityVisible(Boolean((reqResp.data as any).is_visible))
+      const isVisible = Boolean((reqResp.data as any).is_visible)
+      setAvailabilityVisible(isVisible)
+      availabilityWasVisibleRef.current = isVisible
       setAvailabilityLocked(Boolean((reqResp.data as any).responses_locked))
       setAvailabilityLockAt(
         (reqResp.data as any)?.responses_lock_at ? formatDateOnlyFromISODate(String((reqResp.data as any).responses_lock_at)) : '',
@@ -582,6 +611,8 @@ export default function AmproAdminPage() {
     try {
       if (!availabilityPerformanceId) throw new Error('Kies een programma')
       setSavingAvailability(true)
+
+      const shouldBroadcast = Boolean(availabilityVisible) && !availabilityWasVisibleRef.current
 
       const desiredDays = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
       if (!desiredDays.length) throw new Error('Voeg minstens 1 datum toe')
@@ -673,6 +704,17 @@ export default function AmproAdminPage() {
           .insert(selectedUserIds.map((uid) => ({ request_date_id: dateId, user_id: uid })))
         if (insUsers.error) throw insUsers.error
       }
+
+      if (shouldBroadcast) {
+        await broadcastAmproNotification({
+          kind: 'availability',
+          performanceId: String(availabilityPerformanceId),
+          title: 'Nieuwe beschikbaarheden',
+          message: 'Er is een nieuwe beschikbaarheidsvraag beschikbaar in je AmPro project.',
+        })
+      }
+
+      availabilityWasVisibleRef.current = Boolean(availabilityVisible)
 
       showSuccess('Beschikbaarheid opgeslagen')
       await loadAvailability(availabilityPerformanceId)
@@ -1389,6 +1431,13 @@ export default function AmproAdminPage() {
 
       if (error) throw error
 
+      await broadcastAmproNotification({
+        kind: 'note',
+        performanceId: String(newUpdatePerformanceId),
+        title: String(newUpdateTitle.trim() || 'Nieuwe note'),
+        message: clipNotificationMessage(newUpdateBody.trim()) || 'Er is een nieuwe note beschikbaar in je AmPro project.',
+      })
+
       setNewUpdateTitle('')
       setNewUpdateBody('')
       setNoteModalOpen(false)
@@ -1428,6 +1477,15 @@ export default function AmproAdminPage() {
         : await supabase.from('ampro_corrections').insert(payload)
 
       if (resp.error) throw resp.error
+
+      if (!editingCorrectionId && Boolean((payload as any).visible_to_accepted)) {
+        await broadcastAmproNotification({
+          kind: 'correction',
+          performanceId: String(newCorrectionPerformanceId),
+          title: String(newCorrectionTitle.trim() || 'Nieuwe correctie'),
+          message: clipNotificationMessage(newCorrectionBody.trim()) || 'Er is een nieuwe correctie beschikbaar in je AmPro project.',
+        })
+      }
 
       setNewCorrectionBody('')
       setNewCorrectionTitle('')
@@ -1484,6 +1542,19 @@ export default function AmproAdminPage() {
       const next = !Boolean(c?.visible_to_accepted)
       const { error } = await supabase.from('ampro_corrections').update({ visible_to_accepted: next }).eq('id', id)
       if (error) throw error
+
+      if (next) {
+        const pid = String(c?.performance_id || '')
+        if (pid) {
+          await broadcastAmproNotification({
+            kind: 'correction',
+            performanceId: pid,
+            title: String(c?.title || 'Nieuwe correctie'),
+            message: clipNotificationMessage(String(c?.body || '')) || 'Er is een nieuwe correctie beschikbaar in je AmPro project.',
+          })
+        }
+      }
+
       await refresh()
       showSuccess(next ? 'Correctie zichtbaar gezet' : 'Correctie verborgen')
     } catch (e: any) {
