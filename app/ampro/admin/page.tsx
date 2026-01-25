@@ -13,7 +13,7 @@ import Select from '@/components/Select'
 import Modal from '@/components/Modal'
 import ActionIcon from '@/components/ActionIcon'
 
-type AdminSection = 'programmas' | 'forms' | 'notes' | 'applications' | 'members' | 'locations' | 'availability'
+type AdminSection = 'programmas' | 'forms' | 'notes' | 'corrections' | 'applications' | 'members' | 'locations' | 'availability'
 
 function parseFlexibleDateToISODate(input: string): string | null {
   const v = (input || '').trim()
@@ -133,6 +133,7 @@ export default function AmproAdminPage() {
   const [savingGroup, setSavingGroup] = useState<Record<string, boolean>>({})
   const [roster, setRoster] = useState<any[]>([])
   const [updates, setUpdates] = useState<any[]>([])
+  const [corrections, setCorrections] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
 
   const [inviteManageOpen, setInviteManageOpen] = useState(false)
@@ -142,6 +143,7 @@ export default function AmproAdminPage() {
   const [inviteManageLoading, setInviteManageLoading] = useState(false)
   const [inviteConfigMaxUses, setInviteConfigMaxUses] = useState<string>('')
   const [inviteConfigExpiresAt, setInviteConfigExpiresAt] = useState<string>('')
+  const [inviteConfigDirty, setInviteConfigDirty] = useState(false)
   const [inviteDeleteArmed, setInviteDeleteArmed] = useState(false)
   const [inviteDeleteConfirmText, setInviteDeleteConfirmText] = useState('')
   const [inviteManageStatus, setInviteManageStatus] = useState<
@@ -157,7 +159,7 @@ export default function AmproAdminPage() {
       }
   >(null)
 
-  async function refreshInviteStatus(token: string) {
+  async function refreshInviteStatus(token: string, opts?: { syncConfig?: boolean }) {
     const t = String(token || '').trim()
     if (!t) return
     try {
@@ -175,12 +177,16 @@ export default function AmproAdminPage() {
         expires_at: json?.invite?.expires_at ? String(json.invite.expires_at) : null,
       })
 
-      // Keep the config inputs in sync with current invite values (best-effort).
-      const maxUses = json?.invite?.max_uses
-      setInviteConfigMaxUses(maxUses != null && String(maxUses) !== 'null' ? String(maxUses) : '')
-      const exp = json?.invite?.expires_at ? String(json.invite.expires_at) : ''
-      // datetime-local expects YYYY-MM-DDTHH:mm; use UTC representation for consistency.
-      setInviteConfigExpiresAt(exp ? new Date(exp).toISOString().slice(0, 16) : '')
+      const shouldSyncConfig = Boolean(opts?.syncConfig) || !inviteConfigDirty
+      if (shouldSyncConfig) {
+        // Keep the config inputs in sync with current invite values (best-effort).
+        const maxUses = json?.invite?.max_uses
+        setInviteConfigMaxUses(maxUses != null && String(maxUses) !== 'null' ? String(maxUses) : '')
+        const exp = json?.invite?.expires_at ? String(json.invite.expires_at) : ''
+        // datetime-local expects YYYY-MM-DDTHH:mm; use UTC representation for consistency.
+        setInviteConfigExpiresAt(exp ? new Date(exp).toISOString().slice(0, 16) : '')
+        setInviteConfigDirty(false)
+      }
     } catch {
       // Don't block the modal; status is best-effort.
       setInviteManageStatus(null)
@@ -195,6 +201,7 @@ export default function AmproAdminPage() {
       setInviteManageStatus(null)
       setInviteConfigMaxUses('')
       setInviteConfigExpiresAt('')
+      setInviteConfigDirty(false)
       setInviteDeleteArmed(false)
       setInviteDeleteConfirmText('')
       setInviteManageOpen(true)
@@ -215,13 +222,62 @@ export default function AmproAdminPage() {
       setInviteManageUrl(url)
       setInviteManageToken(json?.token ? String(json.token) : null)
       if (json?.token) {
-        await refreshInviteStatus(String(json.token))
+        await refreshInviteStatus(String(json.token), { syncConfig: true })
       }
       showSuccess(json?.reused ? 'Bestaande link geladen' : 'Nieuwe link aangemaakt')
     } catch (e: any) {
       showError(e?.message || 'Kon link niet genereren')
     }
     finally {
+      setInviteManageLoading(false)
+    }
+  }
+
+  async function saveInviteSettings() {
+    const pid = String(inviteManageProgram?.id || '')
+    const token = String(inviteManageToken || '').trim()
+    if (!pid || !token) return
+
+    let maxUses: number | null = null
+    if (inviteConfigMaxUses.trim()) {
+      const n = Number(inviteConfigMaxUses)
+      if (!Number.isFinite(n) || n < 1) {
+        showError('Max uses moet leeg zijn of >= 1')
+        return
+      }
+      maxUses = n
+    }
+
+    let expiresAt: string | null = null
+    if (inviteConfigExpiresAt.trim()) {
+      const d = new Date(inviteConfigExpiresAt)
+      if (!Number.isFinite(d.getTime())) {
+        showError('Ongeldige vervaldatum')
+        return
+      }
+      expiresAt = d.toISOString()
+    }
+
+    try {
+      setInviteManageLoading(true)
+      const resp = await fetch('/api/ampro/program-invites/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          performance_id: pid,
+          token,
+          max_uses: maxUses,
+          expires_at: expiresAt,
+        }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Opslaan mislukt')
+
+      await refreshInviteStatus(token, { syncConfig: true })
+      showSuccess('Instellingen opgeslagen')
+    } catch (e: any) {
+      showError(e?.message || 'Opslaan mislukt')
+    } finally {
       setInviteManageLoading(false)
     }
   }
@@ -610,6 +666,7 @@ export default function AmproAdminPage() {
   const [programmaModalOpen, setProgrammaModalOpen] = useState(false)
   const [editingProgrammaId, setEditingProgrammaId] = useState<string | null>(null)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
+  const [correctionModalOpen, setCorrectionModalOpen] = useState(false)
   const [locationModalOpen, setLocationModalOpen] = useState(false)
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null)
@@ -644,6 +701,13 @@ export default function AmproAdminPage() {
   const [newUpdateTitle, setNewUpdateTitle] = useState('')
   const [newUpdateBody, setNewUpdateBody] = useState('')
   const [savingUpdate, setSavingUpdate] = useState(false)
+
+  const [newCorrectionPerformanceId, setNewCorrectionPerformanceId] = useState('')
+  const [newCorrectionDate, setNewCorrectionDate] = useState('')
+  const [newCorrectionBody, setNewCorrectionBody] = useState('')
+  const [newCorrectionVisibleToAccepted, setNewCorrectionVisibleToAccepted] = useState(true)
+  const [savingCorrection, setSavingCorrection] = useState(false)
+  const [editingCorrectionId, setEditingCorrectionId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -717,6 +781,14 @@ export default function AmproAdminPage() {
           .limit(200)
         if (updatesResp.error) throw updatesResp.error
 
+        const correctionsResp = await supabase
+          .from('ampro_corrections')
+          .select('id,performance_id,correction_date,body,visible_to_accepted,created_at')
+          .order('correction_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(500)
+        if (correctionsResp.error) throw correctionsResp.error
+
         const userIds = Array.from(
           new Set(
             [...(appsResp.data || []).map((a: any) => String(a.user_id)), ...(rosterResp.data || []).map((r: any) => String(r.user_id))]
@@ -751,9 +823,16 @@ export default function AmproAdminPage() {
           setApplications(appsResp.data || [])
           setRoster(rosterResp.data || [])
           setUpdates(updatesResp.data || [])
+          setCorrections(correctionsResp.data || [])
           setProfilesByUserId(profilesMap)
           if (!newUpdatePerformanceId && (perfResp.data || []).length) {
             setNewUpdatePerformanceId(String((perfResp.data as any[])[0]?.id || ''))
+          }
+          if (!newCorrectionPerformanceId && (perfResp.data || []).length) {
+            setNewCorrectionPerformanceId(String((perfResp.data as any[])[0]?.id || ''))
+          }
+          if (!newCorrectionDate) {
+            setNewCorrectionDate(new Date().toISOString().slice(0, 10))
           }
         }
       } catch (e: any) {
@@ -822,6 +901,14 @@ export default function AmproAdminPage() {
       .order('created_at', { ascending: false })
       .limit(200)
     if (!updatesResp.error) setUpdates(updatesResp.data || [])
+
+    const correctionsResp = await supabase
+      .from('ampro_corrections')
+      .select('id,performance_id,correction_date,body,visible_to_accepted,created_at')
+      .order('correction_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (!correctionsResp.error) setCorrections(correctionsResp.data || [])
 
     const userIds = Array.from(
       new Set(
@@ -1269,6 +1356,85 @@ export default function AmproAdminPage() {
     }
   }
 
+  async function saveCorrection() {
+    try {
+      setSavingCorrection(true)
+      if (!newCorrectionPerformanceId) throw new Error('Kies een programma')
+      if (!newCorrectionDate.trim()) throw new Error('Datum is verplicht')
+      if (!newCorrectionBody.trim()) throw new Error('Correctie is verplicht')
+
+      const payload = {
+        performance_id: newCorrectionPerformanceId,
+        correction_date: newCorrectionDate.trim(),
+        body: newCorrectionBody.trim(),
+        visible_to_accepted: Boolean(newCorrectionVisibleToAccepted),
+      }
+
+      const resp = editingCorrectionId
+        ? await supabase.from('ampro_corrections').update(payload).eq('id', editingCorrectionId)
+        : await supabase.from('ampro_corrections').insert(payload)
+
+      if (resp.error) throw resp.error
+
+      setNewCorrectionBody('')
+      setCorrectionModalOpen(false)
+      setEditingCorrectionId(null)
+      await refresh()
+      showSuccess(editingCorrectionId ? 'Correctie bijgewerkt' : 'Correctie toegevoegd')
+    } catch (e: any) {
+      showError(e?.message || (editingCorrectionId ? 'Kon correctie niet bijwerken' : 'Kon correctie niet toevoegen'))
+    } finally {
+      setSavingCorrection(false)
+    }
+  }
+
+  function openCreateCorrectionModal() {
+    setEditingCorrectionId(null)
+    if (!newCorrectionDate) setNewCorrectionDate(new Date().toISOString().slice(0, 10))
+    setNewCorrectionBody('')
+    setNewCorrectionVisibleToAccepted(true)
+    setCorrectionModalOpen(true)
+  }
+
+  function openEditCorrectionModal(c: any) {
+    setEditingCorrectionId(String(c?.id || ''))
+    setNewCorrectionPerformanceId(String(c?.performance_id || ''))
+    setNewCorrectionDate(String(c?.correction_date || new Date().toISOString().slice(0, 10)))
+    setNewCorrectionBody(String(c?.body || ''))
+    setNewCorrectionVisibleToAccepted(Boolean(c?.visible_to_accepted))
+    setCorrectionModalOpen(true)
+  }
+
+  async function deleteCorrection(c: any) {
+    try {
+      const id = String(c?.id || '')
+      if (!id) return
+      const label = c?.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'
+      if (!confirm(`Weet je zeker dat je deze correctie (${label}) wilt verwijderen?`)) return
+
+      const { error } = await supabase.from('ampro_corrections').delete().eq('id', id)
+      if (error) throw error
+      await refresh()
+      showSuccess('Correctie verwijderd')
+    } catch (e: any) {
+      showError(e?.message || 'Kon correctie niet verwijderen')
+    }
+  }
+
+  async function toggleCorrectionVisibility(c: any) {
+    try {
+      const id = String(c?.id || '')
+      if (!id) return
+      const next = !Boolean(c?.visible_to_accepted)
+      const { error } = await supabase.from('ampro_corrections').update({ visible_to_accepted: next }).eq('id', id)
+      if (error) throw error
+      await refresh()
+      showSuccess(next ? 'Correctie zichtbaar gezet' : 'Correctie verborgen')
+    } catch (e: any) {
+      showError(e?.message || 'Kon zichtbaarheid niet aanpassen')
+    }
+  }
+
   function openCreateLocationModal() {
     setEditingLocationId(null)
     setNewLocationName('')
@@ -1330,6 +1496,7 @@ export default function AmproAdminPage() {
     { key: 'locations', label: 'Locaties', icon: MapPin },
     { key: 'availability', label: 'Beschikbaarheid', icon: Calendar },
     { key: 'notes', label: 'Notes', icon: MessageSquare },
+    { key: 'corrections', label: 'Correcties', icon: Edit2 },
     { key: 'applications', label: 'Applicaties', icon: ClipboardList },
     { key: 'members', label: 'Members', icon: Users },
   ]
@@ -1355,6 +1522,20 @@ export default function AmproAdminPage() {
 
   const unknownProgramUpdates = updates.filter((u: any) => {
     const pid = String(u?.performance_id || '')
+    if (!pid) return true
+    return !performances.some((p) => String(p?.id || '') === pid)
+  })
+
+  const correctionsByProgramId = corrections.reduce((acc: Record<string, any[]>, c: any) => {
+    const id = String(c?.performance_id || '')
+    if (!id) return acc
+    if (!acc[id]) acc[id] = []
+    acc[id].push(c)
+    return acc
+  }, {})
+
+  const unknownProgramCorrections = corrections.filter((c: any) => {
+    const pid = String(c?.performance_id || '')
     if (!pid) return true
     return !performances.some((p) => String(p?.id || '') === pid)
   })
@@ -1930,7 +2111,10 @@ export default function AmproAdminPage() {
                     Max aantal gebruikers (optioneel)
                     <input
                       value={inviteConfigMaxUses}
-                      onChange={(e) => setInviteConfigMaxUses(e.target.value)}
+                      onChange={(e) => {
+                        setInviteConfigMaxUses(e.target.value)
+                        setInviteConfigDirty(true)
+                      }}
                       inputMode="numeric"
                       placeholder="(onbeperkt)"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
@@ -1943,7 +2127,10 @@ export default function AmproAdminPage() {
                     <input
                       type="datetime-local"
                       value={inviteConfigExpiresAt}
-                      onChange={(e) => setInviteConfigExpiresAt(e.target.value)}
+                      onChange={(e) => {
+                        setInviteConfigExpiresAt(e.target.value)
+                        setInviteConfigDirty(true)
+                      }}
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                       disabled={inviteManageLoading}
                     />
@@ -1951,15 +2138,6 @@ export default function AmproAdminPage() {
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInviteManageOpen(false)}
-                    disabled={inviteManageLoading}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 disabled:opacity-50"
-                  >
-                    Sluiten
-                  </button>
-
                   <button
                     type="button"
                     onClick={deleteInviteLinks}
@@ -1976,6 +2154,27 @@ export default function AmproAdminPage() {
                     className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                   >
                     Deactiveer
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={saveInviteSettings}
+                    disabled={
+                      inviteManageLoading ||
+                      !inviteManageProgram?.id ||
+                      !inviteManageToken ||
+                      (inviteManageStatus ? Boolean(inviteManageStatus.revoked) : false)
+                    }
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                      inviteManageLoading ||
+                      !inviteManageProgram?.id ||
+                      !inviteManageToken ||
+                      (inviteManageStatus ? Boolean(inviteManageStatus.revoked) : false)
+                        ? 'bg-blue-100 text-blue-400'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {inviteManageLoading ? 'Opslaan…' : 'Opslaan'}
                   </button>
 
                   <button
@@ -2042,6 +2241,87 @@ export default function AmproAdminPage() {
                     </button>
                   </div>
                 ) : null}
+              </div>
+            </Modal>
+
+            <Modal
+              isOpen={correctionModalOpen}
+              onClose={() => setCorrectionModalOpen(false)}
+              ariaLabel="Nieuwe correctie"
+              contentStyle={{ maxWidth: 760 }}
+            >
+              <h2 className="text-xl font-bold text-gray-900">{editingCorrectionId ? 'Correctie bewerken' : 'Nieuwe correctie'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Je kan kiezen of deze zichtbaar is voor geaccepteerde users.</p>
+
+              <div className="mt-6 grid gap-3">
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                  Programma
+                  <select
+                    value={newCorrectionPerformanceId}
+                    onChange={(e) => setNewCorrectionPerformanceId(e.target.value)}
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                  >
+                    <option value="">Kies een programma</option>
+                    {performances.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                  Datum
+                  <input
+                    type="date"
+                    value={newCorrectionDate}
+                    onChange={(e) => setNewCorrectionDate(e.target.value)}
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                  />
+                </label>
+
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={newCorrectionVisibleToAccepted}
+                    onChange={(e) => setNewCorrectionVisibleToAccepted(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  Zichtbaar voor geaccepteerde users
+                </label>
+
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                  Correctie
+                  <textarea
+                    value={newCorrectionBody}
+                    onChange={(e) => setNewCorrectionBody(e.target.value)}
+                    placeholder="Beschrijving van de correctie…"
+                    className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCorrectionModalOpen(false)
+                      setEditingCorrectionId(null)
+                    }}
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveCorrection}
+                    disabled={savingCorrection}
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                      savingCorrection ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {savingCorrection ? 'Opslaan…' : editingCorrectionId ? 'Bijwerken' : 'Plaatsen'}
+                  </button>
+                </div>
               </div>
             </Modal>
 
@@ -2356,8 +2636,7 @@ export default function AmproAdminPage() {
                   />
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                    <div className="text-md font-bold text-gray-900">Alle programma’s</div>
-                    <div className="mt-4 grid gap-2">
+                    <div className="grid gap-2">
                       {filteredProgrammas.map((p) => {
                         const type = String(p?.program_type || '').toLowerCase()
                         const typeLabel = type === 'workshop' ? 'Workshop' : 'Voorstelling'
@@ -2401,12 +2680,12 @@ export default function AmproAdminPage() {
 
                             <div className="flex items-center gap-3 shrink-0">
                               <ActionIcon
-                                title="Kopieer groepslink"
+                                title="Groepslink"
                                 icon={Link2}
                                 variant="muted"
                                 className="hover:text-blue-600"
                                 onClick={() => openInviteManager(String(p.id), String(p.title || 'Programma'))}
-                                aria-label="Kopieer groepslink"
+                                aria-label="Groepslink"
                               />
                               <ActionIcon
                                 title="Bewerk"
@@ -2586,6 +2865,102 @@ export default function AmproAdminPage() {
                   ) : null}
 
                   {updates.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
+                </div>
+              </>
+            ) : null}
+
+            {active === 'corrections' ? (
+              <>
+                <div className="flex items-start justify-between gap-6">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Correcties</h1>
+                    <p className="mt-1 text-sm text-gray-600">Voeg correcties toe per programma (met datum) en kies zichtbaarheid.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openCreateCorrectionModal}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Nieuwe correctie
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  {performances
+                    .filter((p) => (correctionsByProgramId[String(p.id)] || []).length > 0)
+                    .map((p) => {
+                      const rows = correctionsByProgramId[String(p.id)] || []
+                      return (
+                        <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
+                          <div className="text-sm font-semibold text-gray-900">{p.title}</div>
+                          <div className="mt-4 grid gap-2">
+                            {rows.map((c: any) => (
+                              <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-gray-900">
+                                      {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
+                                    </div>
+                                    <div
+                                      className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                        c.visible_to_accepted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                      }`}
+                                    >
+                                      {c.visible_to_accepted ? 'Zichtbaar' : 'Verborgen'}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <ActionIcon
+                                      title={c.visible_to_accepted ? 'Verberg voor users' : 'Maak zichtbaar voor users'}
+                                      icon={Eye}
+                                      variant={c.visible_to_accepted ? 'danger' : 'primary'}
+                                      onClick={() => toggleCorrectionVisibility(c)}
+                                      aria-label={c.visible_to_accepted ? 'Verberg' : 'Toon'}
+                                    />
+                                    <ActionIcon
+                                      title="Bewerk"
+                                      icon={Edit2}
+                                      variant="primary"
+                                      onClick={() => openEditCorrectionModal(c)}
+                                      aria-label="Bewerk"
+                                    />
+                                    <ActionIcon
+                                      title="Verwijderen"
+                                      icon={Trash2}
+                                      variant="danger"
+                                      onClick={() => deleteCorrection(c)}
+                                      aria-label="Verwijderen"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                  {unknownProgramCorrections.length ? (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                      <div className="text-sm font-semibold text-gray-900">Onbekend programma</div>
+                      <div className="mt-4 grid gap-2">
+                        {unknownProgramCorrections.map((c: any) => (
+                          <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
+                            <div className="text-xs text-gray-500">{String(c.performance_id || '')}</div>
+                            <div className="mt-1 text-sm font-semibold text-gray-900">
+                              {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
+                            </div>
+                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
                 </div>
               </>
             ) : null}

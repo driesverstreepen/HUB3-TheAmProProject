@@ -40,7 +40,8 @@ export default function AmproInvitePage({ params }: Props) {
   const [loading, setLoading] = useState(true)
   const [claiming, setClaiming] = useState(false)
   const [lookup, setLookup] = useState<LookupResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
   const [success, setSuccess] = useState(false)
 
@@ -57,7 +58,8 @@ export default function AmproInvitePage({ params }: Props) {
 
     ;(async () => {
       setLoading(true)
-      setError(null)
+      setLookupError(null)
+      setClaimError(null)
 
       try {
         const [{ data: sessionData }, lookupRes] = await Promise.all([
@@ -72,7 +74,7 @@ export default function AmproInvitePage({ params }: Props) {
         if (!lookupRes.ok) throw new Error(json?.error || 'Uitnodiging niet gevonden')
         setLookup(json)
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Er ging iets mis')
+        if (!cancelled) setLookupError(e?.message || 'Er ging iets mis')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -83,16 +85,33 @@ export default function AmproInvitePage({ params }: Props) {
     }
   }, [token])
 
+  // Auto-claim after login/signup when the invite is valid.
+  useEffect(() => {
+    if (!token) return
+    if (!lookup?.status?.ok) return
+    if (!user) return
+    if (success) return
+    if (claiming) return
+    if (claimError) return
+
+    // Fire and forget (errors surface in claimError).
+    claim()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, lookup?.status?.ok, user, success])
+
   async function claim() {
     if (!token) return
     setClaiming(true)
-    setError(null)
+    setClaimError(null)
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData?.session?.access_token || null
+
       const resp = await fetch('/api/ampro/program-invites/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, access_token: accessToken }),
       })
       const json = await resp.json()
       if (!resp.ok) throw new Error(json?.error || 'Claimen mislukt')
@@ -102,7 +121,7 @@ export default function AmproInvitePage({ params }: Props) {
         router.replace(json.redirect || '/ampro/mijn-projecten')
       }, 800)
     } catch (e: any) {
-      setError(e?.message || 'Claimen mislukt')
+      setClaimError(e?.message || 'Claimen mislukt')
     } finally {
       setClaiming(false)
     }
@@ -110,7 +129,7 @@ export default function AmproInvitePage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <LoadingSpinner size={48} className="mx-auto mb-4" label="Uitnodiging laden" />
           <p className="text-gray-600">Uitnodiging laden…</p>
@@ -121,7 +140,7 @@ export default function AmproInvitePage({ params }: Props) {
 
   if (success) {
     return (
-      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
@@ -134,15 +153,15 @@ export default function AmproInvitePage({ params }: Props) {
     )
   }
 
-  if (error || !lookup) {
+  if (lookupError || !lookup) {
     return (
-      <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-10 h-10 text-red-600" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Ongeldige link</h1>
-          <p className="text-gray-600 mb-6">{error || 'Deze uitnodiging kon niet worden gevonden'}</p>
+          <p className="text-gray-600 mb-6">{lookupError || 'Deze uitnodiging kon niet worden gevonden'}</p>
           <Link href="/ampro" className="inline-flex h-11 items-center justify-center rounded-3xl bg-gray-600 px-5 text-sm font-semibold text-white hover:bg-gray-700">
             Terug
           </Link>
@@ -154,7 +173,7 @@ export default function AmproInvitePage({ params }: Props) {
   const disabled = !lookup.status.ok
 
   return (
-    <div className="h-full bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md w-full">
         <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <Link2 className="w-10 h-10 text-blue-600" />
@@ -203,7 +222,7 @@ export default function AmproInvitePage({ params }: Props) {
             >
               {claiming ? 'Koppelen…' : 'Koppel mij aan dit programma'}
             </button>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {claimError ? <p className="text-sm text-red-600">{claimError}</p> : null}
           </div>
         )}
       </div>

@@ -70,7 +70,7 @@ export default function AmproSignupPage() {
           }))
 
           const { error: consentError } = await supabase.from('user_consents').insert(consents)
-          if (consentError) console.error('Error recording consents:', consentError)
+          if (consentError) console.error('Error recording consents:', (consentError as any)?.message || consentError)
 
           // Upsert a summary on ampro_dancer_profiles for quick audit
           try {
@@ -146,9 +146,11 @@ export default function AmproSignupPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !agreedToTerms}
             className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
-              loading ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+              loading || !agreedToTerms
+                ? 'bg-blue-100 text-blue-400'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
             {loading ? 'Bezig…' : 'Account maken'}
