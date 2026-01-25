@@ -59,7 +59,7 @@ export default function AmproLoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm"
+              className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
               required
               autoComplete="email"
             />
@@ -71,7 +71,7 @@ export default function AmproLoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm"
+              className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
               required
               autoComplete="current-password"
             />
@@ -80,7 +80,7 @@ export default function AmproLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className={`h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${
+            className={`h-11 rounded-3xl px-4 mt-4 text-sm font-semibold transition-colors ${
                 loading ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >

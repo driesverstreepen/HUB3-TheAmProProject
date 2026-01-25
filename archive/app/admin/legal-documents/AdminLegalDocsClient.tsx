@@ -58,7 +58,9 @@ export default function AdminLegalDocs({ studioId }: Props) {
         const filtered = all.filter(d => d.studio_id === studioId || d.studio_id === null || d.studio_id === undefined)
         setDocs(filtered)
       } else {
-        setDocs(all)
+        // No studioId => admin is managing platform-level documents only
+        const filtered = all.filter(d => d.studio_id === null || d.studio_id === undefined)
+        setDocs(filtered)
       }
     }
     setLoading(false)
@@ -117,7 +119,8 @@ export default function AdminLegalDocs({ studioId }: Props) {
         if (studioId) {
           await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: duplicateDoc.document_type, studio_id: studioId })
         } else {
-          await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: duplicateDoc.document_type })
+          // mark other global versions inactive only
+          await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: duplicateDoc.document_type, studio_id: null })
         }
         payload.is_active = true
         payload.published_at = new Date().toISOString()
@@ -173,7 +176,8 @@ export default function AdminLegalDocs({ studioId }: Props) {
         if (studioId) {
           await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: docType, studio_id: studioId })
         } else {
-          await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: docType })
+          // mark other global versions inactive only
+          await safeUpdate(supabase, 'legal_documents', { is_active: false }, { document_type: docType, studio_id: null })
         }
       }
 
@@ -200,7 +204,10 @@ export default function AdminLegalDocs({ studioId }: Props) {
           // try to load the existing row so we can offer overwrite or bump
           try {
             const docType = editingDoc?.document_type || 'terms_of_service'
-            const sel = await supabase.from('legal_documents').select('id,document_type').eq('document_type', docType).eq('version', editorVersion).limit(1).single()
+            let selQuery = supabase.from('legal_documents').select('id,document_type').eq('document_type', docType).eq('version', editorVersion).limit(1)
+            if (studioId) selQuery = selQuery.eq('studio_id', studioId)
+            else selQuery = selQuery.is('studio_id', null)
+            const sel = await selQuery.single()
             if (!sel.error && sel.data) {
               setDuplicateDoc({ id: sel.data.id, document_type: sel.data.document_type })
               setMessage('Er bestaat al een versie met dit versienummer. Kies overschrijven of pas het versienummer aan.')
@@ -281,7 +288,7 @@ export default function AdminLegalDocs({ studioId }: Props) {
             </div>
             <div className="w-36 flex flex-col gap-2">
               <button onClick={() => openEditor('terms_of_service')} className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Bewerken</button>
-              <a className="px-3 py-2 text-sm text-slate-600 border rounded text-center" href="/terms-of-service" target="_blank" rel="noreferrer">Bekijk</a>
+              <a className="px-3 py-2 text-sm text-slate-600 border rounded text-center" href="/legal/terms" target="_blank" rel="noreferrer">Bekijk</a>
             </div>
           </div>
         </div>
@@ -312,7 +319,7 @@ export default function AdminLegalDocs({ studioId }: Props) {
             </div>
             <div className="w-36 flex flex-col gap-2">
               <button onClick={() => openEditor('privacy_policy')} className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Bewerken</button>
-              <a className="px-3 py-2 text-sm text-slate-600 border rounded text-center" href="/privacy-policy" target="_blank" rel="noreferrer">Bekijk</a>
+              <a className="px-3 py-2 text-sm text-slate-600 border rounded text-center" href="/legal/privacy-policy" target="_blank" rel="noreferrer">Bekijk</a>
             </div>
           </div>
         </div>

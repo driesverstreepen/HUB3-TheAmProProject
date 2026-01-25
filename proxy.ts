@@ -24,7 +24,7 @@ export async function proxy(request: NextRequest) {
     // Allow root and /start to pass through to the app
     if (pathname === "/" || pathname === "/start") {
       // continue to normal handling
-    } else if (!(pathname.startsWith("/ampro") || pathname.startsWith("/api/ampro"))) {
+    } else if (!(pathname.startsWith("/ampro") || pathname.startsWith("/api/ampro") || pathname.startsWith("/legal") || pathname.startsWith("/admin") || pathname.startsWith("/super-admin"))) {
       if (pathname.startsWith("/api")) {
         return new NextResponse("Not Found", { status: 404 });
       }

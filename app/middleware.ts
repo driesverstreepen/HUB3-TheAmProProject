@@ -4,12 +4,15 @@ import type { NextRequest } from 'next/server'
 // Allowlist of path prefixes that should remain accessible.
 const ALLOWED_PREFIXES = [
   '/ampro',
+  '/legal',
   '/auth',
   '/login',
   '/signup',
   '/profile',
   '/teacher',
   '/studio',
+  '/admin',
+  '/super-admin',
   '/start',
   '/api',
   '/_next',

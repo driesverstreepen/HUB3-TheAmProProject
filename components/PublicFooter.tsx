@@ -32,7 +32,7 @@ export const PublicFooter: React.FC = () => {
   }
 
   return (
-    <footer className="bg-white border-t border-slate-200 mt-12">
+    <footer className="bg-white border-t border-slate-200 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -51,8 +51,8 @@ export const PublicFooter: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4 text-xs text-slate-600">
-            <Link href="/privacy-policy" className="hover:text-blue-600 transition-colors">Privacybeleid</Link>
-            <Link href="/terms-of-service" className="hover:text-blue-600 transition-colors">Algemene Voorwaarden</Link>
+            <Link href="/legal/privacy-policy" className="hover:text-blue-600 transition-colors">Privacybeleid</Link>
+            <Link href="/legal/terms" className="hover:text-blue-600 transition-colors">Algemene Voorwaarden</Link>
             <span className="text-slate-400">© {new Date().getFullYear()} HUB3</span>
           </div>
         </div>

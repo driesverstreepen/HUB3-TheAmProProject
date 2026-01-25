@@ -101,15 +101,16 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
   if (pathname?.startsWith('/ampro')) {
     const hideAmproTopNav = pathname?.startsWith('/ampro/admin')
     return (
-      <div className={`min-h-screen overflow-x-hidden ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
+      <div className={`min-h-screen flex flex-col overflow-x-hidden ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
         {hideAmproTopNav
           ? null
           : isMobile
             ? <AmproMobileTopNav />
             : <AmproTopNav />}
-        <main className="p-0 overflow-x-hidden">
+        <main className="p-0 overflow-x-hidden flex-1">
           {children}
         </main>
+        {(!(pathname === '/' || pathname === '/start') ) && <PublicFooter />}
       </div>
     )
   }
@@ -131,10 +132,10 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
 
   if (showSidebar) {
     return (
-      <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
+      <div className={`min-h-screen flex flex-col ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
         <UserTopNav />
         <FloatingFeedbackButton interface="user" />
-        <main className="p-0">
+        <main className="p-0 flex-1">
           {children}
         </main>
       </div>
@@ -154,13 +155,15 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
     pathname === '/for-studios' ||
     pathname === '/pricing' ||
     pathname === '/faq' ||
-    pathname === '/privacy-policy' ||
-    pathname === '/terms-of-service'
+    pathname === '/legal/privacy-policy' ||
+    pathname === '/legal/terms'
 
   return (
-    <div className={theme === 'dark' ? 'dark bg-black min-h-screen' : 'bg-slate-50 min-h-screen'}>
+    <div className={theme === 'dark' ? 'dark bg-black min-h-screen flex flex-col' : 'bg-slate-50 min-h-screen flex flex-col'}>
       <FloatingFeedbackButton interface="user" />
-      {children}
+      <div className="flex-1">
+        {children}
+      </div>
       {(forcePublicFooter || !isMobile) && <PublicFooter />}
     </div>
   )
