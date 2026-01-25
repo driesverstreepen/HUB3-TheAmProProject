@@ -33,7 +33,7 @@ export default function AmproMijnProjectenPage() {
   const [error, setError] = useState<string | null>(null)
   const [applications, setApplications] = useState<AppRow[]>([])
   const [roster, setRoster] = useState<RosterRow[]>([])
-  const [stripeProductsByProgram, setStripeProductsByProgram] = useState<Record<string, any[]>>({})
+  // Stripe products removed — we rely on admin_payment_url set on the program
   const [checkoutLoading, setCheckoutLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -99,44 +99,9 @@ export default function AmproMijnProjectenPage() {
     return out
   }, [roster])
 
-  const payablePrograms = useMemo(() => {
-    return acceptedPrograms.filter((p) => (stripeProductsByProgram[String(p.performance_id)] || []).length > 0)
-  }, [acceptedPrograms, stripeProductsByProgram])
+  const payablePrograms = useMemo(() => [], [acceptedPrograms])
 
-  useEffect(() => {
-    // fetch stripe products for accepted program ids so we can show payment buttons
-    const ids = acceptedPrograms.map((p) => p.performance_id).filter(Boolean)
-    if (!ids.length) return
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        // query stripe_products where ampro_program_id matches
-        const resp = await supabase
-          .from('stripe_products')
-          .select('*')
-          .in('ampro_program_id', ids)
-
-        if (resp.error) throw resp.error
-
-        const map: Record<string, any[]> = {}
-        for (const row of (resp.data || [] as any[])) {
-          const pid = String((row as any).ampro_program_id || '')
-          if (!pid) continue
-          map[pid] = map[pid] || []
-          map[pid].push(row)
-        }
-
-        if (!cancelled) setStripeProductsByProgram(map)
-      } catch (e) {
-        // ignore optional feature
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [acceptedPrograms])
+  // Removed stripe_products fetch — admin_payment_url on programs/ampro_programmas is used instead.
 
   async function handleCheckout(programId: string) {
     try {
@@ -149,13 +114,23 @@ export default function AmproMijnProjectenPage() {
         credentials: 'same-origin',
       })
 
-      const data = await res.json()
-      if (!res.ok || data?.error) throw new Error(data?.error || 'Kon checkout sessie niet aanmaken')
+      const text = await res.text()
+      let data: any = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch (e) {
+        // not JSON
+      }
 
-      if (data.url) {
+      if (!res.ok) {
+        const msg = (data && data.error) || text || `Request failed (${res.status})`
+        throw new Error(msg)
+      }
+
+      if (data?.error) throw new Error(data.error)
+
+      if (data?.url) {
         window.location.href = data.url
-      } else if (data.session_id) {
-        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`
       } else {
         throw new Error('Geen checkout URL ontvangen')
       }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { autoSyncProgramToStripe } from "@/lib/stripeAutoSync";
+// Stripe auto-sync removed
 import { createNotificationsAndPush } from "@/lib/notify";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -268,6 +268,7 @@ export async function POST(req: Request) {
         linked_form_id: program.linked_form_id ?? null,
         linked_trial_program_id: program.linked_trial_program_id ?? null,
         show_capacity_to_users: program.show_capacity_to_users ?? true,
+        admin_payment_url: program.admin_payment_url || null,
       };
 
     if (schoolYearId) programInsertPayload.school_year_id = schoolYearId;
@@ -487,26 +488,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Auto-sync to Stripe if studio has Stripe Connect configured
-    // This runs in background and doesn't block the response
-    autoSyncProgramToStripe(
-      programData.id,
-      program.studio_id,
-      program.title,
-      program.description,
-      program.price,
-    ).then((result) => {
-      if (result.success) {
-        console.log(
-          `[Auto-sync] Successfully synced program ${programData.id} to Stripe`,
-        );
-      } else if (result.error) {
-        console.warn(
-          `[Auto-sync] Failed to sync program ${programData.id}:`,
-          result.error,
-        );
-      }
-    });
+    // Stripe auto-sync disabled — nothing to do here.
 
     // Best-effort: notify users who follow this studio when a new public program is created
     // (do not block the response)
@@ -741,6 +723,7 @@ export async function PUT(req: Request) {
         linked_form_id: program.linked_form_id ?? null,
         linked_trial_program_id: program.linked_trial_program_id ?? null,
         show_capacity_to_users: program.show_capacity_to_users ?? true,
+        admin_payment_url: program.admin_payment_url || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", programId);

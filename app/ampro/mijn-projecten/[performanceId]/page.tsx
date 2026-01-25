@@ -74,6 +74,7 @@ export default function AmproMijnProjectenDetailPage() {
   const [creatingCheckout, setCreatingCheckout] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [hasPaid, setHasPaid] = useState(false)
+  const [paymentPending, setPaymentPending] = useState(false)
 
   const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
@@ -147,40 +148,7 @@ export default function AmproMijnProjectenDetailPage() {
 
         if (notesResp.error) throw notesResp.error
 
-        // Fetch Stripe product/price separately — there is no DB FK relationship
-        // between `ampro_programmas` and `stripe_products` in the schema cache.
-        let stripeProducts: any[] = []
-        try {
-          // Match `ampro_program_id` (AmPro program rows) — `program_id` was removed
-          const spResp = await supabase
-            .from('stripe_products')
-            .select('*')
-            .eq('ampro_program_id', performanceId)
-
-          if (!spResp.error && spResp.data) stripeProducts = spResp.data as any
-        } catch (err) {
-          // ignore — optional feature
-        }
-
-        // Check if the current user already has a successful payment for this program
-        try {
-          if (user) {
-            const paidResp = await supabase
-              .from('stripe_transactions')
-              .select('id')
-              .eq('ampro_program_id', performanceId)
-              .eq('user_id', user.id)
-              .eq('status', 'succeeded')
-              .limit(1)
-              .maybeSingle()
-
-            if (!paidResp.error && paidResp.data && (paidResp.data as any).id) {
-              if (!cancelled) setHasPaid(true)
-            }
-          }
-        } catch (err) {
-          // ignore
-        }
+        // Stripe integration removed from AmPro detail: admin_payment_url on the program is used.
 
         // Fetch availability via server API to avoid RLS hiding private requests
         let dates: AvailabilityDateRow[] = []
@@ -235,8 +203,8 @@ export default function AmproMijnProjectenDetailPage() {
           setAvailabilityDates(dates)
           setAvailabilityDraft(draft)
           setHasAnyAvailabilityResponse(anyResponse)
-          // Attach fetched stripe products to programa for UI use
-          ;(setProgramma as any)((prev: any) => ({ ...(perfResp.data || {}), stripe_products: stripeProducts }))
+          // Attach programa data (admin_payment_url expected on program row)
+          (setProgramma as any)((prev: any) => ({ ...(perfResp.data || {}) }))
         }
       } catch (e: any) {
         if (!cancelled) showError(e?.message || 'Kon programma niet laden')
@@ -274,9 +242,9 @@ export default function AmproMijnProjectenDetailPage() {
 
   const infoHasAny = Boolean(location || performanceDatesLabel || rehearsalLabel)
 
-  const stripeProduct = (programma as any)?.stripe_products?.[0]
-  const priceLabel = stripeProduct && stripeProduct.price_active && stripeProduct.price_amount
-    ? `${(stripeProduct.price_amount / 100).toFixed(2)} ${String(stripeProduct.price_currency || '').toUpperCase()}`
+  const adminPaymentUrl = (programma as any)?.admin_payment_url || null
+  const priceLabel = (programma as any)?.price
+    ? `${(Number((programma as any).price) / 100).toFixed(2)} ${String('EUR')}`
     : null
 
   async function handleCheckout() {
@@ -287,21 +255,30 @@ export default function AmproMijnProjectenDetailPage() {
       const res = await fetch('/api/payments/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ program_id: programma.id }),
+        body: JSON.stringify({ ampro_program_id: programma.id }),
         credentials: 'same-origin',
       })
-
-      const data = await res.json()
-      if (!res.ok || data?.error) {
-        throw new Error(data?.error || 'Kon checkout sessie niet aanmaken')
+      const text = await res.text()
+      let data: any = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch (e) {
+        // not JSON
       }
 
+      if (!res.ok) {
+        const msg = (data && data.error) || text || `Request failed (${res.status})`
+        throw new Error(msg)
+      }
+
+      if (data?.error) throw new Error(data.error)
+
       // Redirect browser to Stripe Checkout
-      if (data.url) {
+      if (data?.url) {
         window.location.href = data.url
-      } else if (data.session_id) {
+      } else if (data?.session_id) {
         // Fallback: open stripe hosted URL via session id if provided
-        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`;
+        window.location.href = `https://checkout.stripe.com/pay/${data.session_id}`
       } else {
         throw new Error('Geen checkout URL ontvangen')
       }
@@ -460,21 +437,33 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
           </div>
 
-              {stripeProduct && priceLabel && !hasPaid ? (
+              {adminPaymentUrl && priceLabel && !hasPaid ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Betaling</h2>
                   <div className="text-sm text-gray-700 mb-4">Je inschrijving wordt pas geldig na betaling.</div>
+                  {paymentPending ? (
+                    <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm mb-4">
+                      Betaling in behandeling — we verwerken je betaling handmatig.
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-semibold">{priceLabel}</div>
                     <button
                       type="button"
-                      onClick={handleCheckout}
-                      disabled={creatingCheckout}
+                      onClick={() => {
+                        const adminUrl = adminPaymentUrl
+                        try {
+                          window.open(String(adminUrl), '_blank', 'noopener')
+                          setPaymentPending(true)
+                        } catch (e) {
+                          window.location.href = String(adminUrl)
+                        }
+                      }}
                       className={`h-11 ml-4 rounded-3xl px-6 text-sm font-semibold transition-colors ${
                         creatingCheckout ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
                     >
-                      {creatingCheckout ? 'Doorsturen…' : 'Betaal'}
+                      Betaal
                     </button>
                   </div>
                 </div>

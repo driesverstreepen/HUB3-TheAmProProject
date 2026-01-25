@@ -492,6 +492,7 @@ export default function ProgramsPage() {
         show_capacity_to_users: studioFeatures.capacity_visibility !== false ? formData.show_capacity_to_users : false,
         accepts_class_passes: formData.accepts_class_passes || false,
         class_pass_product_id: formData.class_pass_product_id || null,
+        admin_payment_url: formData.admin_payment_url || null,
       };
 
       const groupDetails = formData.program_type === 'group' ? {
@@ -572,6 +573,7 @@ export default function ProgramsPage() {
       capacity: '',
       waitlist_enabled: false,
       price: '',
+      admin_payment_url: '',
       min_age: '',
       max_age: '',
       is_public: true,
@@ -1270,6 +1272,7 @@ function ProgramModal({
           program_type: editingProgram.program_type,
           title: editingProgram.title,
           description: editingProgram.description || '',
+          admin_payment_url: editingProgram.admin_payment_url || '',
           dance_style: editingProgram.dance_style || '',
           level: (editingProgram.level || '') as any,
           capacity: editingProgram.capacity?.toString() || '',
@@ -1864,6 +1867,17 @@ function ProgramModal({
                         <p className="text-xs text-slate-600 mt-2">
                           Vul het bedrag in dat deelnemers moeten betalen via Stripe om zich in te schrijven.
                         </p>
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-slate-900 mb-2">Betaal URL (optioneel)</label>
+                          <input
+                            type="text"
+                            value={formData.admin_payment_url}
+                            onChange={(e) => setFormData({ ...formData, admin_payment_url: e.target.value })}
+                            placeholder="https://voorbeeld.nl/betaal/123"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-slate-600 mt-2">Optioneel: admin kan een externe betaalpagina instellen. Als ingesteld, opent de betaalknop deze URL en wordt betaling als 'in behandeling' gemarkeerd.</p>
+                        </div>
                       </div>
                     )}
                   </div>

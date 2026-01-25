@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { stripe } from "@/lib/stripe";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -230,31 +229,12 @@ export async function POST(request: Request) {
       if (profile?.email) sessionData.customer_email = profile.email;
     }
 
-    // Create the session on the platform so the platform can collect the
-    // application fee and transfer the remainder to the connected account.
-    const session = await stripe.checkout.sessions.create(sessionData);
-
-    // Record transaction
-    await serviceClient.from("stripe_transactions").insert({
-      user_id: cart.user_id || null,
-      studio_id: studioId,
-      program_id: null,
-      stripe_checkout_session_id: session.id,
-      stripe_account_id: studioStripeAccount.stripe_account_id,
-      amount: totalAmount,
-      platform_fee: platformFeeAmount,
-      net_amount: totalAmount - platformFeeAmount,
-      currency: "eur",
-      status: "pending",
-      description: `Cart payment ${cart_id}`,
-      metadata: { cart_id },
-    });
-
+    // Cart-based checkout is no longer supported since Stripe integration
+    // has been removed. Instruct admins to set an `admin_payment_url` on
+    // individual programs so users can follow that link to pay.
     return NextResponse.json({
-      success: true,
-      session_id: session.id,
-      url: session.url,
-    });
+      error: 'Cart checkout not supported. Use per-program admin_payment_url instead.'
+    }, { status: 400 });
   } catch (err: any) {
     console.error("Error creating cart checkout session:", err);
     return NextResponse.json({
