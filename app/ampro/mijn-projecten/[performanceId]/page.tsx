@@ -490,49 +490,45 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
           </div>
 
-          {hasPaid ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
-              <div className="grid gap-3">
-                {notes.map((n) => (
-                  <div key={n.id} className="rounded-3xl border border-gray-200 p-4">
-                    <div className="text-sm font-semibold text-gray-900">{n.title}</div>
-                    <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{n.body}</div>
-                  </div>
-                ))}
-                {notes.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
-              </div>
+              {hasPaid ? (
+                <div className="grid gap-3">
+                  {notes.map((n) => (
+                    <div key={n.id} className="rounded-3xl border border-gray-200 p-4">
+                      <div className="text-sm font-semibold text-gray-900">{n.title}</div>
+                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{n.body}</div>
+                    </div>
+                  ))}
+                  {notes.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+                  Deze sectie is pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om Notes te bekijken.
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
-              <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-                Deze sectie is pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om Notes te bekijken.
-              </div>
-            </div>
-          )}
 
-          {hasPaid ? (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Correcties</h2>
-              <div className="grid gap-3">
-                {corrections.map((c) => (
-                  <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
-                    <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
-                    <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{c.body}</div>
-                  </div>
-                ))}
-                {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
-              </div>
+              {hasPaid ? (
+                <div className="grid gap-3">
+                  {corrections.map((c) => (
+                    <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
+                      <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
+                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{c.body}</div>
+                    </div>
+                  ))}
+                  {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+                  Correcties worden pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om deze sectie te bekijken.
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Correcties</h2>
-              <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-                Correcties worden pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om deze sectie te bekijken.
-              </div>
-            </div>
-          )}
+          </div>
 
           {hasPaid ? (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">

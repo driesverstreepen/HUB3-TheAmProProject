@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 
 type AppRow = {
   id: string
+  performance_id: string
   status: string
   submitted_at: string
   paid?: boolean | null
@@ -19,7 +20,7 @@ type RosterRow = {
   performance_id: string
   role_name: string | null
   added_at: string
-  performance?: { id: string; title: string; admin_payment_url?: string | null; price?: number | null } | null
+  performance?: { id: string; title: string; admin_payment_url?: string | null } | null
 }
 
 function getUserStatusLabel(status: string): string {
@@ -55,14 +56,14 @@ export default function AmproMijnProjectenPage() {
 
         const appsResp = await supabase
           .from('ampro_applications')
-          .select('id,status,submitted_at,paid,payment_received_at,performance:ampro_programmas(id,title,admin_payment_url,price)')
+          .select('id,performance_id,status,submitted_at,paid,payment_received_at,performance:ampro_programmas(id,title,admin_payment_url)')
           .order('submitted_at', { ascending: false })
 
         if (appsResp.error) throw appsResp.error
 
         const rosterResp = await supabase
           .from('ampro_roster')
-          .select('performance_id,role_name,added_at,performance:ampro_programmas(id,title,admin_payment_url,price)')
+          .select('performance_id,role_name,added_at,performance:ampro_programmas(id,title,admin_payment_url)')
           .order('added_at', { ascending: false })
 
         if (rosterResp.error) throw rosterResp.error
@@ -91,7 +92,6 @@ export default function AmproMijnProjectenPage() {
       title: string
       role_name: string | null
       admin_payment_url: string | null
-      price: number | null
     }> = []
     for (const r of roster) {
       const pid = String(r.performance_id || '')
@@ -103,23 +103,33 @@ export default function AmproMijnProjectenPage() {
         title: String(r.performance?.title || pid),
         role_name: r.role_name ?? null,
         admin_payment_url: (r.performance as any)?.admin_payment_url || null,
-        price: typeof (r.performance as any)?.price === 'number' ? (r.performance as any).price : null,
       })
     }
     return out
   }, [roster])
 
-  const payablePrograms = useMemo(() => {
-    return acceptedPrograms.filter((p) => {
-      const app = applications.find(
-        (a) =>
-          String((a.performance as any)?.id || '') === p.performance_id &&
-          String(a.status || '').toLowerCase() === 'accepted'
-      )
-
-      const isPaid = Boolean((app as any)?.paid)
-      return !isPaid && Boolean(p.admin_payment_url)
+  const paymentPrograms = useMemo(() => {
+    const acceptedApps = (applications || []).filter((a) => String(a.status || '').toLowerCase() === 'accepted')
+    const unpaidAccepted = acceptedApps.filter((a) => {
+      const isPaid = Boolean((a as any)?.paid) || Boolean((a as any)?.payment_received_at)
+      return !isPaid
     })
+    if (!unpaidAccepted.length) return []
+
+    const byId = acceptedPrograms.reduce((acc: Record<string, { title: string; admin_payment_url: string | null }>, p) => {
+      acc[String(p.performance_id)] = { title: p.title, admin_payment_url: p.admin_payment_url }
+      return acc
+    }, {})
+
+    return unpaidAccepted
+      .map((a) => {
+        const pid = String((a as any)?.performance_id || '')
+        const fromRoster = byId[pid]
+        const title = fromRoster?.title || String((a.performance as any)?.title || pid)
+        const admin_payment_url = fromRoster?.admin_payment_url || ((a.performance as any)?.admin_payment_url as string | null) || null
+        return { performance_id: pid, title, admin_payment_url }
+      })
+      .filter((p) => Boolean(p.performance_id) && Boolean(p.admin_payment_url))
   }, [acceptedPrograms, applications])
 
   // Removed stripe_products fetch — admin_payment_url on programs/ampro_programmas is used instead.
@@ -175,19 +185,16 @@ export default function AmproMijnProjectenPage() {
               {acceptedPrograms.length === 0 ? <div className="text-sm text-gray-600">Nog niets geaccepteerd.</div> : null}
             </div>
           </div>
-          {payablePrograms.length > 0 ? (
+          {paymentPrograms.length > 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
               <div className="text-md font-bold text-gray-700">Betaling</div>
               <p className="mt-1 text-sm text-gray-600">Betaal je inschrijving voor de volgende programma's.</p>
 
               <div className="mt-4 grid gap-2">
-                {payablePrograms.map((p) => (
+                {paymentPrograms.map((p) => (
                   <div key={p.performance_id} className="flex items-center justify-between gap-4 rounded-3xl border border-gray-200 px-3 py-2">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-gray-700 truncate">{p.title}</div>
-                      {typeof p.price === 'number' ? (
-                        <div className="mt-0.5 text-xs text-gray-600">{(p.price / 100).toFixed(2)} EUR</div>
-                      ) : null}
                     </div>
                     <button
                       type="button"
