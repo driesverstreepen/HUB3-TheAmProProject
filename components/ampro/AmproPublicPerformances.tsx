@@ -94,7 +94,7 @@ export default function AmproPublicPerformances({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-linear-to-br from-gray-900 via-blue-900 to-gray-900 border-b border-gray-700">
+      <div className="bg-linear-to-br from-gray-950 via-gray-800 to-gray-500 border-b border-gray-700">
         <ContentContainer className="py-8">
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1 min-w-0">

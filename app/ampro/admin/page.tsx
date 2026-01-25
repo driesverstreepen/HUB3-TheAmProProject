@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
+import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isAmproAdmin, parseAmproFormFields, type AmproFormField } from '@/lib/ampro'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -134,6 +134,212 @@ export default function AmproAdminPage() {
   const [roster, setRoster] = useState<any[]>([])
   const [updates, setUpdates] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
+
+  const [inviteManageOpen, setInviteManageOpen] = useState(false)
+  const [inviteManageProgram, setInviteManageProgram] = useState<{ id: string; title: string } | null>(null)
+  const [inviteManageUrl, setInviteManageUrl] = useState('')
+  const [inviteManageToken, setInviteManageToken] = useState<string | null>(null)
+  const [inviteManageLoading, setInviteManageLoading] = useState(false)
+  const [inviteConfigMaxUses, setInviteConfigMaxUses] = useState<string>('')
+  const [inviteConfigExpiresAt, setInviteConfigExpiresAt] = useState<string>('')
+  const [inviteManageStatus, setInviteManageStatus] = useState<
+    | null
+    | {
+        ok: boolean
+        revoked: boolean
+        expired: boolean
+        maxed: boolean
+        uses_count: number
+        max_uses: number | null
+        expires_at: string | null
+      }
+  >(null)
+
+  async function refreshInviteStatus(token: string) {
+    const t = String(token || '').trim()
+    if (!t) return
+    try {
+      const resp = await fetch(`/api/ampro/program-invites/lookup?token=${encodeURIComponent(t)}`)
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Kon status niet laden')
+
+      setInviteManageStatus({
+        ok: Boolean(json?.status?.ok),
+        revoked: Boolean(json?.status?.revoked),
+        expired: Boolean(json?.status?.expired),
+        maxed: Boolean(json?.status?.maxed),
+        uses_count: Number(json?.invite?.uses_count || 0),
+        max_uses: json?.invite?.max_uses != null ? Number(json.invite.max_uses) : null,
+        expires_at: json?.invite?.expires_at ? String(json.invite.expires_at) : null,
+      })
+
+      // Keep the config inputs in sync with current invite values (best-effort).
+      const maxUses = json?.invite?.max_uses
+      setInviteConfigMaxUses(maxUses != null && String(maxUses) !== 'null' ? String(maxUses) : '')
+      const exp = json?.invite?.expires_at ? String(json.invite.expires_at) : ''
+      // datetime-local expects YYYY-MM-DDTHH:mm; use UTC representation for consistency.
+      setInviteConfigExpiresAt(exp ? new Date(exp).toISOString().slice(0, 16) : '')
+    } catch {
+      // Don't block the modal; status is best-effort.
+      setInviteManageStatus(null)
+    }
+  }
+
+  async function openInviteManager(performanceId: string, title: string) {
+    try {
+      setInviteManageProgram({ id: performanceId, title })
+      setInviteManageUrl('')
+      setInviteManageToken(null)
+      setInviteManageStatus(null)
+      setInviteConfigMaxUses('')
+      setInviteConfigExpiresAt('')
+      setInviteManageOpen(true)
+      setInviteManageLoading(true)
+
+      const resp = await fetch('/api/ampro/program-invites/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performance_id: performanceId }),
+      })
+
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Kon link niet genereren')
+
+      const url = String(json?.url || '')
+      if (!url) throw new Error('Geen link ontvangen')
+
+      setInviteManageUrl(url)
+      setInviteManageToken(json?.token ? String(json.token) : null)
+      if (json?.token) {
+        await refreshInviteStatus(String(json.token))
+      }
+      showSuccess(json?.reused ? 'Bestaande link geladen' : 'Nieuwe link aangemaakt')
+    } catch (e: any) {
+      showError(e?.message || 'Kon link niet genereren')
+    }
+    finally {
+      setInviteManageLoading(false)
+    }
+  }
+
+  async function rotateInviteWithSettings() {
+    const pid = String(inviteManageProgram?.id || '')
+    if (!pid) return
+
+    let maxUses: number | null = null
+    if (inviteConfigMaxUses.trim()) {
+      const n = Number(inviteConfigMaxUses)
+      if (!Number.isFinite(n) || n < 1) {
+        showError('Max uses moet leeg zijn of >= 1')
+        return
+      }
+      maxUses = n
+    }
+
+    let expiresAt: string | null = null
+    if (inviteConfigExpiresAt.trim()) {
+      const d = new Date(inviteConfigExpiresAt)
+      if (!Number.isFinite(d.getTime())) {
+        showError('Ongeldige vervaldatum')
+        return
+      }
+      expiresAt = d.toISOString()
+    }
+
+    if (!window.confirm('Nieuwe link maken met deze instellingen? De huidige link wordt gedeactiveerd.')) return
+
+    try {
+      setInviteManageLoading(true)
+      const resp = await fetch('/api/ampro/program-invites/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          performance_id: pid,
+          max_uses: maxUses,
+          expires_at: expiresAt,
+          force_new: true,
+        }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Kon nieuwe link niet maken')
+
+      const url = String(json?.url || '')
+      if (!url) throw new Error('Geen link ontvangen')
+
+      setInviteManageUrl(url)
+      setInviteManageToken(json?.token ? String(json.token) : null)
+      if (json?.token) await refreshInviteStatus(String(json.token))
+      showSuccess('Nieuwe link aangemaakt')
+    } catch (e: any) {
+      showError(e?.message || 'Kon nieuwe link niet maken')
+    } finally {
+      setInviteManageLoading(false)
+    }
+  }
+
+  async function copyInviteUrl() {
+    if (!inviteManageUrl) return
+    try {
+      await navigator.clipboard.writeText(inviteManageUrl)
+      showSuccess('Link gekopieerd')
+    } catch {
+      window.prompt('Kopieer deze link:', inviteManageUrl)
+    }
+  }
+
+  async function revokeInviteLinks() {
+    const pid = String(inviteManageProgram?.id || '')
+    if (!pid) return
+    if (!window.confirm('Groepslink deactiveren? De huidige link werkt dan niet meer.')) return
+
+    try {
+      setInviteManageLoading(true)
+      const tokenBefore = inviteManageToken
+      const resp = await fetch('/api/ampro/program-invites/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performance_id: pid }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Deactiveren mislukt')
+
+      // Keep the last URL visible for audit/reference, but status will flip to inactive.
+      if (tokenBefore) await refreshInviteStatus(String(tokenBefore))
+      showSuccess(`Link gedeactiveerd (${Number(json?.revoked_count || 0)})`)
+    } catch (e: any) {
+      showError(e?.message || 'Deactiveren mislukt')
+    } finally {
+      setInviteManageLoading(false)
+    }
+  }
+
+  async function deleteInviteLinks() {
+    const pid = String(inviteManageProgram?.id || '')
+    if (!pid) return
+
+    const confirm = window.prompt('Typ DELETE om alle invite links voor dit programma te verwijderen:')
+    if (confirm !== 'DELETE') return
+
+    try {
+      setInviteManageLoading(true)
+      const resp = await fetch('/api/ampro/program-invites/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performance_id: pid, confirm: 'DELETE' }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) throw new Error(json?.error || 'Verwijderen mislukt')
+
+      setInviteManageUrl('')
+      setInviteManageToken(null)
+      setInviteManageStatus(null)
+      showSuccess(`Links verwijderd (${Number(json?.deleted_count || 0)})`)
+    } catch (e: any) {
+      showError(e?.message || 'Verwijderen mislukt')
+    } finally {
+      setInviteManageLoading(false)
+    }
+  }
 
   const [availabilityPerformanceId, setAvailabilityPerformanceId] = useState('')
   const [availabilityRequestId, setAvailabilityRequestId] = useState<string | null>(null)
@@ -1659,6 +1865,141 @@ export default function AmproAdminPage() {
             </Modal>
 
             <Modal
+              isOpen={inviteManageOpen}
+              onClose={() => {
+                if (inviteManageLoading) return
+                setInviteManageOpen(false)
+              }}
+              ariaLabel="Groepslink beheren"
+              contentStyle={{ maxWidth: 720 }}
+            >
+              <h2 className="text-xl font-bold text-gray-900">Groepslink beheren</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Programma: <span className="font-semibold">{inviteManageProgram?.title || ''}</span>
+              </p>
+
+              <div className="mt-6 grid gap-3">
+                {inviteManageStatus ? (
+                  <div
+                    className={`rounded-2xl border px-4 py-3 text-sm ${
+                      inviteManageStatus.ok
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                        : 'border-amber-200 bg-amber-50 text-amber-900'
+                    }`}
+                  >
+                    <div className="font-semibold">
+                      Status: {inviteManageStatus.ok ? 'Actief' : inviteManageStatus.revoked ? 'Gedeactiveerd' : inviteManageStatus.expired ? 'Verlopen' : inviteManageStatus.maxed ? 'Vol' : 'Niet actief'}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      Gebruikt: {inviteManageStatus.uses_count}
+                      {inviteManageStatus.max_uses != null ? ` / ${inviteManageStatus.max_uses}` : ''}
+                      {inviteManageStatus.expires_at ? ` • Verloopt: ${new Date(inviteManageStatus.expires_at).toLocaleString()}` : ''}
+                    </div>
+                  </div>
+                ) : null}
+
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                  Link
+                  <input
+                    value={inviteManageUrl || (inviteManageLoading ? 'Laden…' : '')}
+                    readOnly
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
+                    Max aantal gebruikers (optioneel)
+                    <input
+                      value={inviteConfigMaxUses}
+                      onChange={(e) => setInviteConfigMaxUses(e.target.value)}
+                      inputMode="numeric"
+                      placeholder="(onbeperkt)"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                      disabled={inviteManageLoading}
+                    />
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-medium text-gray-700">
+                    Vervaldatum (optioneel)
+                    <input
+                      type="datetime-local"
+                      value={inviteConfigExpiresAt}
+                      onChange={(e) => setInviteConfigExpiresAt(e.target.value)}
+                      className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                      disabled={inviteManageLoading}
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInviteManageOpen(false)}
+                    disabled={inviteManageLoading}
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 disabled:opacity-50"
+                  >
+                    Sluiten
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={deleteInviteLinks}
+                    disabled={inviteManageLoading || !inviteManageProgram?.id}
+                    className="h-11 rounded-3xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Verwijder links
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={revokeInviteLinks}
+                    disabled={inviteManageLoading || !inviteManageProgram?.id}
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Deactiveer
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={rotateInviteWithSettings}
+                    disabled={inviteManageLoading || !inviteManageProgram?.id}
+                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Nieuwe link (met limiet)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={copyInviteUrl}
+                    disabled={inviteManageLoading || !inviteManageUrl || (inviteManageStatus ? !inviteManageStatus.ok : false)}
+                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                      inviteManageLoading || !inviteManageUrl || (inviteManageStatus ? !inviteManageStatus.ok : false)
+                        ? 'bg-blue-100 text-blue-400'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    Kopieer link
+                  </button>
+                </div>
+
+                {inviteManageToken ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">
+                    <div>Token: {inviteManageStatus?.ok ? 'actief' : 'niet actief'}</div>
+                    <button
+                      type="button"
+                      onClick={() => refreshInviteStatus(inviteManageToken)}
+                      disabled={inviteManageLoading}
+                      className="font-semibold text-gray-900 hover:text-blue-600 disabled:opacity-50"
+                    >
+                      Ververs status
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </Modal>
+
+            <Modal
               isOpen={noteModalOpen}
               onClose={() => setNoteModalOpen(false)}
               ariaLabel="Nieuwe note"
@@ -1857,7 +2198,7 @@ export default function AmproAdminPage() {
                             {formattedSnapshotRows.map((r) => (
                               <div key={r.label} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                 <div className="text-xs font-semibold text-gray-600">{r.label}</div>
-                                <div className="mt-1 text-sm font-semibold text-gray-900 break-words">{r.value || '-'}</div>
+                                <div className="mt-1 text-sm font-semibold text-gray-900 wrap-break-word">{r.value || '-'}</div>
                               </div>
                             ))}
                           </div>
@@ -1872,7 +2213,7 @@ export default function AmproAdminPage() {
                               {formFields.map((f) => (
                                 <div key={f.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                   <div className="text-xs font-semibold text-gray-600">{f.label}</div>
-                                  <div className="mt-1 text-sm font-semibold text-gray-900 break-words">
+                                  <div className="mt-1 text-sm font-semibold text-gray-900 wrap-break-word">
                                     {formatAnswer(f, (answers as any)[f.key]) || '-'}
                                   </div>
                                 </div>
@@ -2013,6 +2354,14 @@ export default function AmproAdminPage() {
                             </div>
 
                             <div className="flex items-center gap-3 shrink-0">
+                              <ActionIcon
+                                title="Kopieer groepslink"
+                                icon={Link2}
+                                variant="muted"
+                                className="hover:text-blue-600"
+                                onClick={() => openInviteManager(String(p.id), String(p.title || 'Programma'))}
+                                aria-label="Kopieer groepslink"
+                              />
                               <ActionIcon
                                 title="Bewerk"
                                 icon={Edit2}

@@ -26,10 +26,10 @@ export default async function PrivacyPolicyPage() {
   }
 
   return (
-    <main className="prose mx-auto py-12 px-4">
-      <h1>Privacyverklaring</h1>
-      <p className="text-sm text-slate-600 mb-4">Versie: {version}</p>
-      <article className="prose max-w-none text-slate-700" dangerouslySetInnerHTML={{ __html: content }} />
+    <main className="prose mx-auto py-14 pl-12 px-4">
+      <p className="text-lg font-bold text-gray-900">Privacyverklaring</p>
+      <p className="text-sm text-gray-600 mb-4">Versie: {version}</p>
+      <article className="prose max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: content }} />
     </main>
   )
 }
