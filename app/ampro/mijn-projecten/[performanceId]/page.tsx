@@ -5,10 +5,12 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Calendar, MapPin, ChevronDown } from 'lucide-react'
 import Select from '@/components/Select'
+import Modal from '@/components/Modal'
 import { supabase } from '@/lib/supabase'
 import ContentContainer from '@/components/ContentContainer'
 import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
 import { useNotification } from '@/contexts/NotificationContext'
+import { useDevice } from '@/contexts/DeviceContext'
 
 type Programma = {
   id: string
@@ -35,13 +37,16 @@ type NoteRow = {
   title: string
   body: string
   created_at: string
+  sort_order?: number
 }
 
 type CorrectionRow = {
   id: string
+  title?: string | null
   correction_date: string
   body: string
   created_at: string
+  sort_order?: number
 }
 
 type AvailabilityRequestRow = {
@@ -74,6 +79,7 @@ export default function AmproMijnProjectenDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { showError, showSuccess } = useNotification()
+  const { isMobile } = useDevice()
   const performanceId = useMemo(() => String((params as any)?.performanceId || ''), [params])
 
   const [checking, setChecking] = useState(true)
@@ -86,6 +92,11 @@ export default function AmproMijnProjectenDetailPage() {
   const [hasPaid, setHasPaid] = useState(false)
   const [paymentPending, setPaymentPending] = useState(false)
   const [paymentReceivedAt, setPaymentReceivedAt] = useState<string | null>(null)
+
+  const [noteModalOpen, setNoteModalOpen] = useState(false)
+  const [activeNote, setActiveNote] = useState<NoteRow | null>(null)
+  const [correctionModalOpen, setCorrectionModalOpen] = useState(false)
+  const [activeCorrection, setActiveCorrection] = useState<CorrectionRow | null>(null)
 
   const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
@@ -153,17 +164,19 @@ export default function AmproMijnProjectenDetailPage() {
 
         const notesResp = await supabase
           .from('ampro_notes')
-          .select('id,title,body,created_at')
+          .select('id,title,body,sort_order,created_at')
           .eq('performance_id', performanceId)
+          .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false })
 
         if (notesResp.error) throw notesResp.error
 
         const correctionsResp = await supabase
           .from('ampro_corrections')
-          .select('id,correction_date,body,created_at')
+          .select('id,title,correction_date,body,sort_order,created_at')
           .eq('performance_id', performanceId)
           .eq('visible_to_accepted', true)
+          .order('sort_order', { ascending: true })
           .order('correction_date', { ascending: false })
           .order('created_at', { ascending: false })
         if (correctionsResp.error) throw correctionsResp.error
@@ -284,6 +297,24 @@ export default function AmproMijnProjectenDetailPage() {
     ? `${(Number(priceCents) / 100).toFixed(2)} EUR`
     : null
 
+  function openNote(n: NoteRow) {
+    if (isMobile) {
+      router.push(`/ampro/mijn-projecten/${encodeURIComponent(performanceId)}/notes/${encodeURIComponent(n.id)}`)
+      return
+    }
+    setActiveNote(n)
+    setNoteModalOpen(true)
+  }
+
+  function openCorrection(c: CorrectionRow) {
+    if (isMobile) {
+      router.push(`/ampro/mijn-projecten/${encodeURIComponent(performanceId)}/correcties/${encodeURIComponent(c.id)}`)
+      return
+    }
+    setActiveCorrection(c)
+    setCorrectionModalOpen(true)
+  }
+
   async function handleCheckout() {
     try {
       if (!programma?.id) return
@@ -383,59 +414,57 @@ export default function AmproMijnProjectenDetailPage() {
         </button>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <h1 className="text-3xl font-bold text-gray-900">{programma.title}</h1>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                {typeLabel}
-              </span>
-              {programma.region ? (
-                <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {programma.region}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
             <div className="lg:col-span-3 h-full">
-              {infoHasAny ? (
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full flex flex-col">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
-                  <div className="grid gap-3 text-sm text-gray-700">
-                    {location ? (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
-                        <div className="grid gap-1">
-                          <div>
-                            <span className="text-gray-900">Locatie:</span> {location.name}
-                          </div>
-                          {location.address ? (
-                            <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 h-full">
+                <h1 className="text-3xl font-bold text-gray-900">{programma.title}</h1>
 
-                    {rehearsalLabel ? (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <span>Repetitie periode: {rehearsalLabel}</span>
-                      </div>
-                    ) : null}
-
-                    {performanceDatesLabel ? (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <span>Voorstellingsdata: {performanceDatesLabel}</span>
-                      </div>
-                    ) : null}
-                  </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {typeLabel}
+                  </span>
+                  {programma.region ? (
+                    <span className="inline-flex items-center px-4 py-2 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {programma.region}
+                    </span>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full" />
-              )}
+
+                {infoHasAny ? (
+                  <div className="mt-6">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
+                    <div className="grid gap-3 text-sm text-gray-700">
+                      {location ? (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
+                          <div className="grid gap-1">
+                            <div>
+                              <span className="text-gray-900">Locatie:</span> {location.name}
+                            </div>
+                            {location.address ? (
+                              <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {rehearsalLabel ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>Repetitie periode: {rehearsalLabel}</span>
+                        </div>
+                      ) : null}
+
+                      {performanceDatesLabel ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>Voorstellingsdata: {performanceDatesLabel}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className="lg:col-span-1 h-full">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full flex flex-col justify-between">
@@ -496,10 +525,18 @@ export default function AmproMijnProjectenDetailPage() {
               {hasPaid ? (
                 <div className="grid gap-3">
                   {notes.map((n) => (
-                    <div key={n.id} className="rounded-3xl border border-gray-200 p-4">
-                      <div className="text-sm font-semibold text-gray-900">{n.title}</div>
-                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{n.body}</div>
-                    </div>
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => openNote(n)}
+                      className="rounded-3xl border border-gray-200 p-4 text-left hover:bg-gray-50 transition-colors"
+                      aria-label={`Open note: ${n.title}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm font-semibold text-gray-900">{n.title}</div>
+                        <div className="shrink-0 text-xs text-gray-500">{formatDateOnlyFromISODate(String(n.created_at))}</div>
+                      </div>
+                    </button>
                   ))}
                   {notes.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
                 </div>
@@ -515,10 +552,18 @@ export default function AmproMijnProjectenDetailPage() {
               {hasPaid ? (
                 <div className="grid gap-3">
                   {corrections.map((c) => (
-                    <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
-                      <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
-                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{c.body}</div>
-                    </div>
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => openCorrection(c)}
+                      className="rounded-3xl border border-gray-200 p-4 text-left hover:bg-gray-50 transition-colors"
+                      aria-label={`Open correctie van ${formatDateOnlyFromISODate(String(c.correction_date))}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                        <div className="shrink-0 text-xs text-gray-500">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
+                      </div>
+                    </button>
                   ))}
                   {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
                 </div>
@@ -529,6 +574,46 @@ export default function AmproMijnProjectenDetailPage() {
               )}
             </div>
           </div>
+
+          <Modal
+            isOpen={noteModalOpen && !!activeNote}
+            onClose={() => {
+              setNoteModalOpen(false)
+              setActiveNote(null)
+            }}
+            ariaLabel="Note"
+            contentClassName="bg-white rounded-2xl shadow-xl max-w-2xl w-full"
+          >
+            {activeNote ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-gray-900">{activeNote.title}</h3>
+                  <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(activeNote.created_at))}</div>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">{activeNote.body}</div>
+              </div>
+            ) : null}
+          </Modal>
+
+          <Modal
+            isOpen={correctionModalOpen && !!activeCorrection}
+            onClose={() => {
+              setCorrectionModalOpen(false)
+              setActiveCorrection(null)
+            }}
+            ariaLabel="Correctie"
+            contentClassName="bg-white rounded-2xl shadow-xl max-w-2xl w-full"
+          >
+            {activeCorrection ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-gray-900">{String(activeCorrection.title || 'Correctie')}</h3>
+                  <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(activeCorrection.correction_date))}</div>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">{activeCorrection.body}</div>
+              </div>
+            ) : null}
+          </Modal>
 
           {hasPaid ? (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">

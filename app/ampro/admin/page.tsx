@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
+import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2, GripVertical } from 'lucide-react'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '@/lib/supabase'
 import { isAmproAdmin, parseAmproFormFields, type AmproFormField } from '@/lib/ampro'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -118,9 +121,36 @@ function availabilityStatusLabel(status: string | null | undefined) {
   return 'Geen antwoord'
 }
 
+function SortableCardItem({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? 'opacity-70' : undefined}>
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+          title="Versleep om volgorde te bepalen"
+          aria-label="Versleep"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function AmproAdminPage() {
   const router = useRouter()
   const { showSuccess, showError } = useNotification()
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [checking, setChecking] = useState(true)
   const [active, setActive] = useState<AdminSection>('programmas')
   const [performances, setPerformances] = useState<any[]>([])
@@ -701,9 +731,12 @@ export default function AmproAdminPage() {
   const [newUpdateTitle, setNewUpdateTitle] = useState('')
   const [newUpdateBody, setNewUpdateBody] = useState('')
   const [savingUpdate, setSavingUpdate] = useState(false)
+  const [savingNotesOrderByProgramId, setSavingNotesOrderByProgramId] = useState<Record<string, boolean>>({})
+  const [savingCorrectionsOrderByProgramId, setSavingCorrectionsOrderByProgramId] = useState<Record<string, boolean>>({})
 
   const [newCorrectionPerformanceId, setNewCorrectionPerformanceId] = useState('')
   const [newCorrectionDate, setNewCorrectionDate] = useState('')
+  const [newCorrectionTitle, setNewCorrectionTitle] = useState('')
   const [newCorrectionBody, setNewCorrectionBody] = useState('')
   const [newCorrectionVisibleToAccepted, setNewCorrectionVisibleToAccepted] = useState(true)
   const [savingCorrection, setSavingCorrection] = useState(false)
@@ -776,14 +809,18 @@ export default function AmproAdminPage() {
 
         const updatesResp = await supabase
           .from('ampro_notes')
-          .select('id,performance_id,title,body,visibility,created_at,updated_at')
+          .select('id,performance_id,title,body,visibility,sort_order,created_at,updated_at')
+          .order('performance_id', { ascending: true })
+          .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false })
-          .limit(200)
+          .limit(500)
         if (updatesResp.error) throw updatesResp.error
 
         const correctionsResp = await supabase
           .from('ampro_corrections')
-          .select('id,performance_id,correction_date,body,visible_to_accepted,created_at')
+          .select('id,performance_id,title,correction_date,body,visible_to_accepted,sort_order,created_at')
+          .order('performance_id', { ascending: true })
+          .order('sort_order', { ascending: true })
           .order('correction_date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(500)
@@ -897,14 +934,18 @@ export default function AmproAdminPage() {
 
     const updatesResp = await supabase
       .from('ampro_notes')
-      .select('id,performance_id,title,body,visibility,created_at,updated_at')
+      .select('id,performance_id,title,body,visibility,sort_order,created_at,updated_at')
+      .order('performance_id', { ascending: true })
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(500)
     if (!updatesResp.error) setUpdates(updatesResp.data || [])
 
     const correctionsResp = await supabase
       .from('ampro_corrections')
-      .select('id,performance_id,correction_date,body,visible_to_accepted,created_at')
+      .select('id,performance_id,title,correction_date,body,visible_to_accepted,sort_order,created_at')
+      .order('performance_id', { ascending: true })
+      .order('sort_order', { ascending: true })
       .order('correction_date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(500)
@@ -1333,6 +1374,9 @@ export default function AmproAdminPage() {
       if (!newUpdateTitle.trim()) throw new Error('Titel is verplicht')
       if (!newUpdateBody.trim()) throw new Error('Inhoud is verplicht')
 
+      const existing = (updates || []).filter((u: any) => String(u?.performance_id || '') === String(newUpdatePerformanceId))
+      const maxSort = Math.max(0, ...existing.map((u: any) => (Number.isFinite(Number(u?.sort_order)) ? Number(u.sort_order) : 0)))
+
       const { error } = await supabase
         .from('ampro_notes')
         .insert({
@@ -1340,6 +1384,7 @@ export default function AmproAdminPage() {
           title: newUpdateTitle.trim(),
           body: newUpdateBody.trim(),
           visibility: 'accepted_only',
+          sort_order: maxSort + 1,
         })
 
       if (error) throw error
@@ -1365,9 +1410,17 @@ export default function AmproAdminPage() {
 
       const payload = {
         performance_id: newCorrectionPerformanceId,
+        title: newCorrectionTitle.trim() || null,
         correction_date: newCorrectionDate.trim(),
         body: newCorrectionBody.trim(),
         visible_to_accepted: Boolean(newCorrectionVisibleToAccepted),
+        sort_order: 0,
+      }
+
+      if (!editingCorrectionId) {
+        const existing = (corrections || []).filter((c: any) => String(c?.performance_id || '') === String(newCorrectionPerformanceId))
+        const maxSort = Math.max(0, ...existing.map((c: any) => (Number.isFinite(Number(c?.sort_order)) ? Number(c.sort_order) : 0)))
+        ;(payload as any).sort_order = maxSort + 1
       }
 
       const resp = editingCorrectionId
@@ -1377,6 +1430,7 @@ export default function AmproAdminPage() {
       if (resp.error) throw resp.error
 
       setNewCorrectionBody('')
+      setNewCorrectionTitle('')
       setCorrectionModalOpen(false)
       setEditingCorrectionId(null)
       await refresh()
@@ -1391,6 +1445,7 @@ export default function AmproAdminPage() {
   function openCreateCorrectionModal() {
     setEditingCorrectionId(null)
     if (!newCorrectionDate) setNewCorrectionDate(new Date().toISOString().slice(0, 10))
+    setNewCorrectionTitle('')
     setNewCorrectionBody('')
     setNewCorrectionVisibleToAccepted(true)
     setCorrectionModalOpen(true)
@@ -1399,6 +1454,7 @@ export default function AmproAdminPage() {
   function openEditCorrectionModal(c: any) {
     setEditingCorrectionId(String(c?.id || ''))
     setNewCorrectionPerformanceId(String(c?.performance_id || ''))
+    setNewCorrectionTitle(String(c?.title || ''))
     setNewCorrectionDate(String(c?.correction_date || new Date().toISOString().slice(0, 10)))
     setNewCorrectionBody(String(c?.body || ''))
     setNewCorrectionVisibleToAccepted(Boolean(c?.visible_to_accepted))
@@ -1525,6 +1581,78 @@ export default function AmproAdminPage() {
     if (!pid) return true
     return !performances.some((p) => String(p?.id || '') === pid)
   })
+
+  function replaceGroupInArray(prev: any[], performanceId: string, newGroup: any[]) {
+    const pid = String(performanceId || '')
+    const firstIndex = prev.findIndex((x: any) => String(x?.performance_id || '') === pid)
+    const remaining = prev.filter((x: any) => String(x?.performance_id || '') !== pid)
+    if (firstIndex < 0) return [...remaining, ...newGroup]
+    const head = prev.slice(0, firstIndex).filter((x: any) => String(x?.performance_id || '') !== pid)
+    const tail = prev.slice(firstIndex).filter((x: any) => String(x?.performance_id || '') !== pid)
+    return [...head, ...newGroup, ...tail]
+  }
+
+  async function persistSortOrder(table: 'ampro_notes' | 'ampro_corrections', rows: any[], performanceId: string) {
+    const pid = String(performanceId || '')
+    if (!pid) return
+
+    const savingSetter = table === 'ampro_notes' ? setSavingNotesOrderByProgramId : setSavingCorrectionsOrderByProgramId
+    try {
+      savingSetter((s) => ({ ...s, [pid]: true }))
+
+      for (const r of rows) {
+        const id = String(r?.id || '')
+        if (!id) continue
+        const sortOrder = Number.isFinite(Number(r?.sort_order)) ? Number(r.sort_order) : 0
+        const { error } = await supabase.from(table).update({ sort_order: sortOrder }).eq('id', id)
+        if (error) throw error
+      }
+    } finally {
+      savingSetter((s) => ({ ...s, [pid]: false }))
+    }
+  }
+
+  async function handleNotesDragEnd(performanceId: string, items: any[], event: DragEndEvent) {
+    const pid = String(performanceId || '')
+    const activeId = String(event.active?.id || '')
+    const overId = String(event.over?.id || '')
+    if (!pid || !activeId || !overId || activeId === overId) return
+
+    const oldIndex = items.findIndex((x: any) => String(x?.id || '') === activeId)
+    const newIndex = items.findIndex((x: any) => String(x?.id || '') === overId)
+    if (oldIndex < 0 || newIndex < 0) return
+
+    const moved = arrayMove(items, oldIndex, newIndex).map((x: any, idx: number) => ({ ...x, sort_order: idx + 1 }))
+    setUpdates((prev) => replaceGroupInArray(prev, pid, moved))
+
+    try {
+      await persistSortOrder('ampro_notes', moved, pid)
+      showSuccess('Volgorde notes opgeslagen')
+    } catch (e: any) {
+      showError(e?.message || 'Kon volgorde notes niet opslaan')
+    }
+  }
+
+  async function handleCorrectionsDragEnd(performanceId: string, items: any[], event: DragEndEvent) {
+    const pid = String(performanceId || '')
+    const activeId = String(event.active?.id || '')
+    const overId = String(event.over?.id || '')
+    if (!pid || !activeId || !overId || activeId === overId) return
+
+    const oldIndex = items.findIndex((x: any) => String(x?.id || '') === activeId)
+    const newIndex = items.findIndex((x: any) => String(x?.id || '') === overId)
+    if (oldIndex < 0 || newIndex < 0) return
+
+    const moved = arrayMove(items, oldIndex, newIndex).map((x: any, idx: number) => ({ ...x, sort_order: idx + 1 }))
+    setCorrections((prev) => replaceGroupInArray(prev, pid, moved))
+
+    try {
+      await persistSortOrder('ampro_corrections', moved, pid)
+      showSuccess('Volgorde correcties opgeslagen')
+    } catch (e: any) {
+      showError(e?.message || 'Kon volgorde correcties niet opslaan')
+    }
+  }
 
   const correctionsByProgramId = corrections.reduce((acc: Record<string, any[]>, c: any) => {
     const id = String(c?.performance_id || '')
@@ -1789,13 +1917,6 @@ export default function AmproAdminPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setProgrammaModalOpen(false)}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    type="button"
                     onClick={saveProgramma}
                     disabled={saving}
                     className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
@@ -2041,16 +2162,6 @@ export default function AmproAdminPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setFormModalOpen(false)
-                      setEditingFormId(null)
-                    }}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    type="button"
                     onClick={createForm}
                     disabled={savingForm}
                     className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
@@ -2250,7 +2361,7 @@ export default function AmproAdminPage() {
               ariaLabel="Nieuwe correctie"
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">{editingCorrectionId ? 'Correctie bewerken' : 'Nieuwe correctie'}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{editingCorrectionId ? 'Correctie bewerken' : 'Nieuwe correctie'}</h2>
               <p className="mt-1 text-sm text-gray-600">Je kan kiezen of deze zichtbaar is voor geaccepteerde users.</p>
 
               <div className="mt-6 grid gap-3">
@@ -2280,6 +2391,17 @@ export default function AmproAdminPage() {
                   />
                 </label>
 
+                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                  Titel (optioneel)
+                  <input
+                    type="text"
+                    value={newCorrectionTitle}
+                    onChange={(e) => setNewCorrectionTitle(e.target.value)}
+                    placeholder="Bv. Armpositie in bar 3"
+                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                  />
+                </label>
+
                 <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                   <input
                     type="checkbox"
@@ -2303,16 +2425,6 @@ export default function AmproAdminPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setCorrectionModalOpen(false)
-                      setEditingCorrectionId(null)
-                    }}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    type="button"
                     onClick={saveCorrection}
                     disabled={savingCorrection}
                     className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
@@ -2331,7 +2443,7 @@ export default function AmproAdminPage() {
               ariaLabel="Nieuwe note"
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">Nieuwe note</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Nieuwe note</h2>
               <p className="mt-1 text-sm text-gray-600">Note wordt zichtbaar voor geaccepteerde users.</p>
 
               <div className="mt-6 grid gap-3">
@@ -2374,13 +2486,6 @@ export default function AmproAdminPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setNoteModalOpen(false)}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    type="button"
                     onClick={createUpdate}
                     disabled={savingUpdate}
                     className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
@@ -2399,7 +2504,7 @@ export default function AmproAdminPage() {
               ariaLabel={editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">{editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}</h2>
               <p className="mt-1 text-sm text-gray-600">Voeg een locatie toe die je kan koppelen aan programma’s.</p>
 
               <div className="mt-6 grid gap-3">
@@ -2424,13 +2529,6 @@ export default function AmproAdminPage() {
                 </label>
 
                 <div className="mt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setLocationModalOpen(false)}
-                    className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                  >
-                    Annuleren
-                  </button>
                   <button
                     type="button"
                     onClick={saveLocation}
@@ -2491,7 +2589,7 @@ export default function AmproAdminPage() {
                     return (
                       <div className="space-y-6">
                         <div>
-                          <h2 className="text-xl font-bold text-gray-900">User gegevens</h2>
+                          <h2 className="text-2xl font-bold text-gray-900">User gegevens</h2>
                         </div>
 
                         <div>
@@ -2589,13 +2687,6 @@ export default function AmproAdminPage() {
                           />
                         </div>
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setMemberDeleteOpen(false)}
-                            className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900"
-                          >
-                            Annuleren
-                          </button>
                           <button
                             type="button"
                             disabled={!canDelete}
@@ -2833,17 +2924,35 @@ export default function AmproAdminPage() {
                   {performances
                     .filter((p) => (updatesByProgramId[String(p.id)] || []).length > 0)
                     .map((p) => {
-                      const notes = updatesByProgramId[String(p.id)] || []
+                      const pid = String(p.id)
+                      const notes = (updatesByProgramId[pid] || []).slice().sort((a: any, b: any) => {
+                        const ao = Number.isFinite(Number(a?.sort_order)) ? Number(a.sort_order) : 0
+                        const bo = Number.isFinite(Number(b?.sort_order)) ? Number(b.sort_order) : 0
+                        if (ao !== bo) return ao - bo
+                        return String(b?.created_at || '').localeCompare(String(a?.created_at || ''))
+                      })
+                      const savingOrder = Boolean(savingNotesOrderByProgramId[pid])
                       return (
                         <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
                           <div className="text-sm font-semibold text-gray-900">{p.title}</div>
+                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Volgorde opslaan…</div> : null}
                           <div className="mt-4 grid gap-2">
-                            {notes.map((u: any) => (
-                              <div key={u.id} className="rounded-3xl border border-gray-200 p-4">
-                                <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
-                                <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
-                              </div>
-                            ))}
+                            <DndContext
+                              sensors={sensors}
+                              collisionDetection={closestCenter}
+                              onDragEnd={(e) => handleNotesDragEnd(pid, notes, e)}
+                            >
+                              <SortableContext items={notes.map((n: any) => String(n.id))} strategy={verticalListSortingStrategy}>
+                                {notes.map((u: any) => (
+                                  <SortableCardItem key={u.id} id={String(u.id)}>
+                                    <div className="rounded-3xl border border-gray-200 p-4">
+                                      <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
+                                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
+                                    </div>
+                                  </SortableCardItem>
+                                ))}
+                              </SortableContext>
+                            </DndContext>
                           </div>
                         </div>
                       )
@@ -2890,54 +2999,76 @@ export default function AmproAdminPage() {
                   {performances
                     .filter((p) => (correctionsByProgramId[String(p.id)] || []).length > 0)
                     .map((p) => {
-                      const rows = correctionsByProgramId[String(p.id)] || []
+                      const pid = String(p.id)
+                      const rows = (correctionsByProgramId[pid] || []).slice().sort((a: any, b: any) => {
+                        const ao = Number.isFinite(Number(a?.sort_order)) ? Number(a.sort_order) : 0
+                        const bo = Number.isFinite(Number(b?.sort_order)) ? Number(b.sort_order) : 0
+                        if (ao !== bo) return ao - bo
+                        const ad = String(a?.correction_date || '')
+                        const bd = String(b?.correction_date || '')
+                        if (ad !== bd) return bd.localeCompare(ad)
+                        return String(b?.created_at || '').localeCompare(String(a?.created_at || ''))
+                      })
+                      const savingOrder = Boolean(savingCorrectionsOrderByProgramId[pid])
                       return (
                         <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
                           <div className="text-sm font-semibold text-gray-900">{p.title}</div>
+                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Volgorde opslaan…</div> : null}
                           <div className="mt-4 grid gap-2">
-                            {rows.map((c: any) => (
-                              <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-semibold text-gray-900">
-                                      {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
-                                    </div>
-                                    <div
-                                      className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                                        c.visible_to_accepted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                      }`}
-                                    >
-                                      {c.visible_to_accepted ? 'Zichtbaar' : 'Verborgen'}
-                                    </div>
-                                  </div>
+                            <DndContext
+                              sensors={sensors}
+                              collisionDetection={closestCenter}
+                              onDragEnd={(e) => handleCorrectionsDragEnd(pid, rows, e)}
+                            >
+                              <SortableContext items={rows.map((r: any) => String(r.id))} strategy={verticalListSortingStrategy}>
+                                {rows.map((c: any) => (
+                                  <SortableCardItem key={c.id} id={String(c.id)}>
+                                    <div className="rounded-3xl border border-gray-200 p-4">
+                                      <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                                          <div className="mt-0.5 text-xs text-gray-500">
+                                            {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
+                                          </div>
+                                          <div
+                                            className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                              c.visible_to_accepted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                            }`}
+                                          >
+                                            {c.visible_to_accepted ? 'Zichtbaar' : 'Verborgen'}
+                                          </div>
+                                        </div>
 
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <ActionIcon
-                                      title={c.visible_to_accepted ? 'Verberg voor users' : 'Maak zichtbaar voor users'}
-                                      icon={Eye}
-                                      variant={c.visible_to_accepted ? 'danger' : 'primary'}
-                                      onClick={() => toggleCorrectionVisibility(c)}
-                                      aria-label={c.visible_to_accepted ? 'Verberg' : 'Toon'}
-                                    />
-                                    <ActionIcon
-                                      title="Bewerk"
-                                      icon={Edit2}
-                                      variant="primary"
-                                      onClick={() => openEditCorrectionModal(c)}
-                                      aria-label="Bewerk"
-                                    />
-                                    <ActionIcon
-                                      title="Verwijderen"
-                                      icon={Trash2}
-                                      variant="danger"
-                                      onClick={() => deleteCorrection(c)}
-                                      aria-label="Verwijderen"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
-                              </div>
-                            ))}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <ActionIcon
+                                            title={c.visible_to_accepted ? 'Verberg voor users' : 'Maak zichtbaar voor users'}
+                                            icon={Eye}
+                                            variant={c.visible_to_accepted ? 'danger' : 'primary'}
+                                            onClick={() => toggleCorrectionVisibility(c)}
+                                            aria-label={c.visible_to_accepted ? 'Verberg' : 'Toon'}
+                                          />
+                                          <ActionIcon
+                                            title="Bewerk"
+                                            icon={Edit2}
+                                            variant="primary"
+                                            onClick={() => openEditCorrectionModal(c)}
+                                            aria-label="Bewerk"
+                                          />
+                                          <ActionIcon
+                                            title="Verwijderen"
+                                            icon={Trash2}
+                                            variant="danger"
+                                            onClick={() => deleteCorrection(c)}
+                                            aria-label="Verwijderen"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
+                                    </div>
+                                  </SortableCardItem>
+                                ))}
+                              </SortableContext>
+                            </DndContext>
                           </div>
                         </div>
                       )
@@ -2950,7 +3081,8 @@ export default function AmproAdminPage() {
                         {unknownProgramCorrections.map((c: any) => (
                           <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
                             <div className="text-xs text-gray-500">{String(c.performance_id || '')}</div>
-                            <div className="mt-1 text-sm font-semibold text-gray-900">
+                            <div className="mt-1 text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                            <div className="mt-0.5 text-xs text-gray-500">
                               {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
                             </div>
                             <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>

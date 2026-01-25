@@ -4,6 +4,7 @@ create table if not exists public.ampro_corrections (
   id uuid primary key default gen_random_uuid(),
   performance_id uuid not null references public.ampro_programmas(id) on delete cascade,
   correction_date date not null,
+  sort_order integer not null default 0,
   body text not null,
   visible_to_accepted boolean not null default false,
   created_by uuid references auth.users(id) on delete set null,
@@ -16,6 +17,9 @@ create index if not exists ampro_corrections_performance_id_idx
 
 create index if not exists ampro_corrections_performance_date_idx
   on public.ampro_corrections(performance_id, correction_date desc, created_at desc);
+
+create index if not exists ampro_corrections_performance_sort_order_idx
+  on public.ampro_corrections(performance_id, sort_order);
 
 alter table public.ampro_corrections enable row level security;
 

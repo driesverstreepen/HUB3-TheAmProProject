@@ -216,7 +216,7 @@ export default function AmproMijnProjectenPage() {
 
           <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
             <div className="text-md font-bold text-gray-700">Mijn inschrijvingen</div>
-            <p className="mt-1 text-sm text-gray-600">Status van je applications.</p>
+            <p className="mt-1 text-sm text-gray-600">Status van je open applicaties.</p>
 
             <div className="mt-4 grid gap-2">
               {applied.map((a) => (
