@@ -2,9 +2,6 @@
 
 import React from 'react'
 
-import UserTopNav from '@/components/user/UserTopNav'
-import HubTopNav from '@/components/hub/HubTopNav'
-import HubMobileTopNav from '@/components/hub/HubMobileTopNav'
 import AmproTopNav from '@/components/ampro/AmproTopNav'
 import AmproMobileTopNav from '@/components/ampro/AmproMobileTopNav'
 import { usePathname } from 'next/navigation'
@@ -13,7 +10,6 @@ import { FeatureFlagsProvider } from '@/contexts/FeatureFlagsContext'
 import { PublicFooter } from '@/components/PublicFooter'
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
 import { DeviceProvider, useDevice } from '@/contexts/DeviceContext'
-import { MobileShell } from '@/components/MobileShell'
 import FloatingFeedbackButton from '@/components/feedback/FloatingFeedbackButton'
 
 export default function UserLayout({
@@ -29,15 +25,10 @@ export default function UserLayout({
   // is opened with a studioId query param we consider it part of the
   // studio management interface and therefore do NOT show the top nav
   // (the studio sidebar will be rendered by the hub page itself).
-  const showSidebar = pathname.startsWith('/mijn-lessen') || 
-            pathname.startsWith('/profile') || 
-            pathname.startsWith('/settings') ||
-            pathname.startsWith('/dashboard') ||
-            pathname.startsWith('/class-passes') ||
-            pathname.startsWith('/favorieten')
-
-    // Pages that should NOT show the public footer (admin or management sections)
-    const excludeFooter = pathname.startsWith('/admin') || pathname.startsWith('/super-admin') || pathname.startsWith('/studio') || pathname.startsWith('/teacher')
+  // AmPro-only deployment: keep layout logic minimal and avoid importing
+  // non-AmPro shells so we can archive them safely.
+  const showSidebar = false
+  const excludeFooter = false
 
     return (
         <ThemeProvider>
@@ -73,18 +64,6 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
     }
   }, [pathname])
 
-  // Studio public pages should use the HUB top navigation
-  if (pathname?.startsWith('/studio/public')) {
-    return (
-      <div className={`min-h-screen overflow-x-hidden ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
-        {isMobile ? <HubMobileTopNav /> : <HubTopNav />}
-        <main className="p-0 overflow-x-hidden">
-          {children}
-        </main>
-      </div>
-    )
-  }
-
   // AmPro public pages should match the studio public shell (HUB top nav).
   if (pathname?.startsWith('/ampro')) {
     const hideAmproTopNav = pathname?.startsWith('/ampro/admin') || pathname?.startsWith('/ampro/invite')
@@ -99,42 +78,6 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
           {children}
         </main>
         {(!(pathname === '/' || pathname === '/start') ) && <PublicFooter />}
-      </div>
-    )
-  }
-
-  // Mobile app-like layout for user-facing routes
-  const isUserAppRoute = !!pathname && (
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/explore') ||
-    pathname.startsWith('/program') ||
-    pathname.startsWith('/programmas') ||
-    pathname.startsWith('/teachers') ||
-    pathname.startsWith('/class-passes') ||
-    pathname.startsWith('/favorieten') ||
-    showSidebar
-  )
-  if (isMobile && isUserAppRoute && !excludeFooter) {
-    return <MobileShell>{children}</MobileShell>
-  }
-
-  if (showSidebar) {
-    return (
-      <div className={`min-h-screen flex flex-col ${theme === 'dark' ? 'dark bg-black' : 'bg-slate-50'}`}>
-        <UserTopNav />
-        <FloatingFeedbackButton interface="user" />
-        <main className="p-0 flex-1">
-          {children}
-        </main>
-      </div>
-    )
-  }
-
-  if (excludeFooter) {
-    return (
-      <div className={theme === 'dark' ? 'dark bg-black min-h-screen' : 'bg-slate-50 min-h-screen'}>
-        <FloatingFeedbackButton interface="user" />
-        {children}
       </div>
     )
   }

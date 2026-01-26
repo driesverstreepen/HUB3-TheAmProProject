@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Building2, Calendar, Users, Settings, LogOut, LayoutDashboard, BookOpen, User, DollarSign, MessageSquare, UserMinus, Sun, Moon, Mail, CreditCard, Star, Menu, ChevronDown, ChevronUp } from 'lucide-react';
+import { Building2, Calendar, Users, Settings, LogOut, LayoutDashboard, BookOpen, User, DollarSign, MessageSquare, UserMinus, Mail, CreditCard, Star, Menu, ChevronDown, ChevronUp } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select'
@@ -34,7 +34,7 @@ export default function StudioSidebar({ studioId, studioName, studioLogo }: Stud
   const [isStudioMember, setIsStudioMember] = useState(false);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { theme, toggle } = useTheme();
+  const { theme } = useTheme();
   const { isMobile } = useDevice()
   const { isEnabled, isHidden, getComingSoonLabel } = useFeatureFlags();
   const { hasFeature, subscription } = useStudioFeatures(studioId);
@@ -400,13 +400,6 @@ export default function StudioSidebar({ studioId, studioName, studioLogo }: Stud
     }
     actions.push({ label: 'Instellingen', href: settingsBaseHref, icon: Settings })
     actions.push({
-      label: theme === 'dark' ? 'Lichtmodus' : 'Donker modus',
-      onClick: () => {
-        toggle()
-      },
-      icon: theme === 'dark' ? Sun : Moon,
-    })
-    actions.push({
       label: showLogoutConfirm ? 'Bevestig uitloggen' : 'Uitloggen',
       onClick: () => {
         handleLogoutClick()
@@ -546,10 +539,6 @@ export default function StudioSidebar({ studioId, studioName, studioLogo }: Stud
             title={showLogoutConfirm ? 'Bevestig uitloggen' : 'Uitloggen'}
           >
             <LogOut className="w-4 h-4" />
-          </button>
-          {/* Theme toggle */}
-          <button onClick={toggle} className="p-2 rounded-md text-slate-600 hover:bg-slate-100 transition-colors" title={theme === 'dark' ? 'Schakel lichtmodus in' : 'Schakel donker modus in'}>
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
           {/* Settings */}
           <button

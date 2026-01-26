@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { User, Settings, LogOut, Sun, Moon, Menu } from 'lucide-react'
+import { User, Settings, LogOut, Menu } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import NotificationBell from '@/components/NotificationBell'
 import { MobileSidebar, type MobileSidebarSection } from '@/components/ui/MobileSidebar'
@@ -26,7 +26,7 @@ export default function HubMobileTopNav() {
       }
     | null
   >(null)
-  const { theme, toggle } = useTheme()
+  const { theme } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const [hideTopNav, setHideTopNav] = useState(false)
   const lastScrollYRef = useRef(0)
@@ -282,7 +282,6 @@ export default function HubMobileTopNav() {
           href: isStudioAdmin ? (studioId ? `/studio/${studioId}/settings` : '/studio') : '/settings',
           icon: Settings,
         },
-        { label: theme === 'dark' ? 'Lichtmodus' : 'Donker modus', onClick: toggle, icon: theme === 'dark' ? Sun : Moon },
         {
           label: showLogoutConfirm ? 'Bevestig uitloggen' : 'Uitloggen',
           onClick: () => {

@@ -6,7 +6,6 @@ import { Analytics } from '@vercel/analytics/next'
 import { createSupabaseServiceClient } from '@/lib/supabase'
 import { defaultTypographyConfig, normalizeTypographyConfig, typographyConfigToCss } from '@/lib/typography'
 import { unstable_noStore as noStore } from 'next/cache'
-import TypographyLiveSync from '@/components/TypographyLiveSync'
 import ScrollbarsOnScroll from './ScrollbarsOnScroll'
 
 export const metadata: Metadata = {
@@ -66,6 +65,9 @@ export default async function RootLayout({
   return (
     <html lang="nl">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
         {siteLogoUrl ? (
           <>
             <link rel="apple-touch-icon" sizes="180x180" href={siteLogoUrl} />
@@ -77,7 +79,7 @@ export default async function RootLayout({
       <body className="font-sans antialiased">
         <ScrollbarsOnScroll />
         <style id="hub3-typography-vars">{typographyCss}</style>
-        {!isAmpro ? <TypographyLiveSync /> : null}
+        {/* TypographyLiveSync is HUB3-only and is archived in AmPro deploy. */}
         <Suspense fallback={<div className="min-h-screen bg-white" />}>
           <UserLayoutWrapper>{children}</UserLayoutWrapper>
         </Suspense>

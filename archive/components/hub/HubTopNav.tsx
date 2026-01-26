@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { User, Settings, LogOut, Sun, Moon, Check } from 'lucide-react';
+import { User, Settings, LogOut, Check } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/NotificationBell';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
@@ -15,7 +15,7 @@ export default function HubTopNav() {
   const [isStudioOwner, setIsStudioOwner] = useState(false);
   const [studioId, setStudioId] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { theme, toggle } = useTheme();
+  const { theme } = useTheme();
   const { isEnabled, isHidden, getComingSoonLabel } = useFeatureFlags();
 
   useEffect(() => {
@@ -283,16 +283,6 @@ export default function HubTopNav() {
                 title="Instellingen"
               >
                 <Settings className="w-4 h-4" />
-              </button>
-
-              {/* Theme toggle */}
-              <button
-                onClick={toggle}
-                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                title={theme === 'dark' ? 'Schakel lichtmodus in' : 'Schakel donker modus in'}
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
 
               {/* Logout */}

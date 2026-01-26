@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Calendar, User, Settings, LogOut, Sun, Moon, Home, CreditCard, Building2, ChevronDown, Menu, Check, Heart } from 'lucide-react'
+import { Calendar, User, Settings, LogOut, Home, CreditCard, Building2, ChevronDown, Menu, Check, Heart } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import NotificationBell from '@/components/NotificationBell'
 import { useEffect, useRef, useState } from 'react'
@@ -28,7 +28,7 @@ export default function UserTopNav() {
   const [showStudioSwitcher, setShowStudioSwitcher] = useState(false)
   const [extraAdminStudios, setExtraAdminStudios] = useState<any[]>([])
   const [loadingStudios, setLoadingStudios] = useState(true)
-  const { theme, toggle } = useTheme()
+  const { theme } = useTheme()
   const { isMobile } = useDevice()
   const [menuOpen, setMenuOpen] = useState(false)
   const [hideTopNav, setHideTopNav] = useState(false)
@@ -421,14 +421,6 @@ export default function UserTopNav() {
                   >
                     <Settings className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={toggle}
-                    className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                    title={theme === 'dark' ? 'Schakel lichtmodus in' : 'Schakel donker modus in'}
-                    aria-label="Toggle theme"
-                  >
-                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  </button>
                   {showLogoutConfirm ? (
                     <button
                       onClick={handleLogout}
@@ -585,7 +577,6 @@ export default function UserTopNav() {
               items: [
                 { label: 'Profiel', href: '/profile', icon: User },
                 { label: 'Instellingen', href: '/settings', icon: Settings },
-                { label: theme === 'dark' ? 'Lichtmodus' : 'Donker modus', onClick: toggle, icon: theme === 'dark' ? Sun : Moon },
                 {
                   label: showLogoutConfirm ? 'Bevestig uitloggen' : 'Uitloggen',
                   onClick: async () => {

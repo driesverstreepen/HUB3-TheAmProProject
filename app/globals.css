@@ -45,7 +45,8 @@ body:not(.dark) {
 
 /* Prevent iOS Safari from auto-adjusting text sizes (helps keep app-like feel). */
 html {
-  background: transparent;
+  /* iOS notch/safe-area regions can show the <html> background. */
+  background-color: rgb(var(--background-start-rgb));
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
