@@ -1,69 +1,70 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 
 type Theme = 'light' | 'dark'
 
 interface ThemeContextValue {
   theme: Theme
-  setTheme: (t: Theme) => void
-  toggle: () => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Important for SSR hydration: server render and first client render must match.
+  // We start with a deterministic theme and then sync to system preference after mount.
   const [theme, setTheme] = useState<Theme>('light')
 
-  // On mount, check localStorage/prefers and apply to body immediately (sync)
-  // to prevent white flash. This runs before paint in the browser.
-  useLayoutEffect(() => {
+  // System-following theme: keep in sync with device preferences.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let mql: MediaQueryList | null = null
     try {
-      const stored = localStorage.getItem('theme') as Theme | null
-      let initialTheme: Theme = 'light'
-      if (stored === 'dark' || stored === 'light') {
-        initialTheme = stored
-      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        initialTheme = 'dark'
-      }
-      setTheme(initialTheme)
-      // Apply to body immediately
-      if (initialTheme === 'dark') document.body.classList.add('dark')
-      else document.body.classList.remove('dark')
+      mql = window.matchMedia('(prefers-color-scheme: dark)')
     } catch {
-      // ignore
+      mql = null
+    }
+
+    const apply = (t: Theme) => {
+      try {
+        if (t === 'dark') document.body.classList.add('dark')
+        else document.body.classList.remove('dark')
+      } catch {
+        // ignore
+      }
+    }
+
+    const nextTheme: Theme = mql?.matches ? 'dark' : 'light'
+    setTheme(nextTheme)
+    apply(nextTheme)
+
+    const handler = (e: MediaQueryListEvent) => {
+      const t: Theme = e.matches ? 'dark' : 'light'
+      setTheme(t)
+      apply(t)
+    }
+
+    if (mql) {
+      try {
+        mql.addEventListener('change', handler)
+      } catch {
+        // Safari <14
+        ;(mql as any).addListener?.(handler)
+      }
+    }
+
+    return () => {
+      if (!mql) return
+      try {
+        mql.removeEventListener('change', handler)
+      } catch {
+        ;(mql as any).removeListener?.(handler)
+      }
     }
   }, [])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('theme', theme)
-    } catch {
-      // ignore
-    }
-    try {
-      // Persist theme to a cookie so server-rendered pages can read it and
-      // include the correct class on the initial render. Keep for 1 year.
-      document.cookie = `theme=${theme}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
-    } catch {
-      // ignore
-    }
-  }, [theme])
-
-  // Apply theme class on the body element so global styles can react to it.
-  // We avoid modifying <html> because Next/React manages that element during
-  // hydration and changing it before hydration may cause a mismatch.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const root = document.body
-    if (theme === 'dark') root.classList.add('dark')
-    else root.classList.remove('dark')
-  }, [theme])
-
-  const toggle = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
-
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme }}>
       {children}
     </ThemeContext.Provider>
   )

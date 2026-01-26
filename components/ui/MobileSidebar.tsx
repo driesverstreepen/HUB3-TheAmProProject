@@ -180,16 +180,16 @@ export function MobileSidebar({
 
       {/* Panel */}
       <div
-        className={`absolute left-0 top-0 h-full w-[78vw] max-w-xs bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 shadow-xl transition-transform ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`absolute left-0 top-0 h-full w-[78vw] max-w-xs bg-white dark:bg-gray-900 shadow-xl transition-transform ${open ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         role="dialog"
         aria-modal="true"
         data-mobile-sidebar-panel="true"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-          {header || <div className="font-semibold text-slate-900 dark:text-slate-100">Menu</div>}
-          <button onClick={onClose} aria-label="Close menu" className="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-white">
-            <X className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+        <div className="flex items-center justify-between px-4 py-3">
+          {header || <div className="font-semibold text-gray-900 dark:text-gray-100">Menu</div>}
+          <button onClick={onClose} aria-label="Close menu" className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white">
+            <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
         </div>
 
@@ -197,7 +197,7 @@ export function MobileSidebar({
           {sections.map((section, si) => (
             <div key={si} className={`px-2 ${si === 0 ? '' : 'mt-4'}`}>
               {section.title && (
-                <div className="px-2 py-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="px-2 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   {section.title}
                 </div>
               )}
@@ -216,11 +216,11 @@ export function MobileSidebar({
 
                   const labelClassName = item.tone === 'danger'
                     ? 'text-base font-medium text-red-600 dark:text-red-400 group-hover:!text-red-700 dark:group-hover:!text-red-700'
-                    : 'text-base font-medium text-slate-900 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900'
+                    : 'text-base font-medium text-gray-900 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900'
 
                   const iconClassName = item.tone === 'danger'
                     ? 'w-5 h-5 text-red-600 dark:text-red-400 group-hover:!text-red-700 dark:group-hover:!text-red-700'
-                    : 'w-5 h-5 text-slate-700 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900'
+                    : 'w-5 h-5 text-gray-700 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900'
 
                   const RowContent = (
                     <>
@@ -229,7 +229,7 @@ export function MobileSidebar({
                         <div className="flex flex-col">
                           <span className={labelClassName}>{item.label}</span>
                           {badge ? (
-                            <span className="mt-1 text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-600 self-start">
+                            <span className="mt-1 text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 self-start">
                               {badge}
                             </span>
                           ) : null}
@@ -241,29 +241,29 @@ export function MobileSidebar({
                   return (
                     <div key={`${si}-${ii}`}>
                       {item.disabled ? (
-                        <div className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-slate-400 cursor-not-allowed opacity-60">
+                        <div className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-gray-400 cursor-not-allowed opacity-60">
                           {RowContent}
                         </div>
                       ) : hasChildren ? (
                         <button
                           onClick={() => setExpanded(prev => ({ ...prev, [ii]: !prev[ii] }))}
-                          className={`group w-full flex items-center justify-between px-4 py-2.5 rounded-md transition-colors hover:bg-slate-50 dark:hover:bg-white`}
+                          className={`group w-full flex items-center justify-between px-4 py-2.5 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-white`}
                         >
                           {RowContent}
-                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${item.tone === 'danger' ? 'text-red-600 dark:text-red-400 group-hover:!text-red-700 dark:group-hover:!text-red-700' : 'text-slate-500 dark:text-slate-300 group-hover:!text-slate-900 dark:group-hover:!text-slate-900'}`} />
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${item.tone === 'danger' ? 'text-red-600 dark:text-red-400 group-hover:!text-red-700 dark:group-hover:!text-red-700' : 'text-gray-500 dark:text-gray-300 group-hover:!text-gray-900 dark:group-hover:!text-gray-900'}`} />
                         </button>
                       ) : item.href ? (
                         <Link
                           href={item.href}
                           onClick={onItem}
-                          className="group flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors hover:bg-slate-50 dark:hover:bg-white"
+                          className="group flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-white"
                         >
                           {RowContent}
                         </Link>
                       ) : (
                         <button
                           onClick={onItem}
-                          className="group flex items-center gap-3 w-full px-4 py-2.5 rounded-md transition-colors hover:bg-slate-50 dark:hover:bg-white"
+                          className="group flex items-center gap-3 w-full px-4 py-2.5 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-white"
                         >
                           {RowContent}
                         </button>
@@ -275,12 +275,12 @@ export function MobileSidebar({
                             child.disabled ? (
                               <div
                                 key={`${si}-${ii}-${ci}`}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-md text-base text-slate-400 cursor-not-allowed opacity-60"
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-md text-base text-gray-400 cursor-not-allowed opacity-60"
                               >
                                 {child.icon ? <child.icon className="w-4 h-4" /> : null}
                                 <span>{child.label}</span>
                                 {typeof child.badge === 'string' && child.badge.trim().length > 0 ? (
-                                    <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-600">
+                                    <span className="ml-2 text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600">
                                       {child.badge.trim()}
                                     </span>
                                 ) : null}
@@ -290,19 +290,19 @@ export function MobileSidebar({
                                 key={`${si}-${ii}-${ci}`}
                                 href={child.href}
                                 onClick={() => onClose()}
-                                className="group flex items-center gap-2 px-4 py-2.5 rounded-md text-base text-slate-800 dark:text-slate-100 transition-colors hover:bg-slate-50 dark:hover:bg-white"
+                                className="group flex items-center gap-2 px-4 py-2.5 rounded-md text-base text-gray-800 dark:text-gray-100 transition-colors hover:bg-gray-50 dark:hover:bg-white"
                               >
-                                {child.icon ? <child.icon className="w-4 h-4 text-slate-600 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900" /> : null}
-                                <span className="text-slate-800 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900">{child.label}</span>
+                                {child.icon ? <child.icon className="w-4 h-4 text-gray-600 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900" /> : null}
+                                <span className="text-gray-800 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900">{child.label}</span>
                               </Link>
                             ) : (
                               <button
                                 key={`${si}-${ii}-${ci}`}
                                 onClick={child.onClick}
-                                className="group flex items-center gap-2 w-full px-4 py-2.5 rounded-md text-base text-slate-800 dark:text-slate-100 transition-colors hover:bg-slate-50 dark:hover:bg-white"
+                                className="group flex items-center gap-2 w-full px-4 py-2.5 rounded-md text-base text-gray-800 dark:text-gray-100 transition-colors hover:bg-gray-50 dark:hover:bg-white"
                               >
-                                {child.icon ? <child.icon className="w-4 h-4 text-slate-600 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900" /> : null}
-                                <span className="text-slate-800 dark:text-slate-100 group-hover:!text-slate-900 dark:group-hover:!text-slate-900">{child.label}</span>
+                                {child.icon ? <child.icon className="w-4 h-4 text-gray-600 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900" /> : null}
+                                <span className="text-gray-800 dark:text-gray-100 group-hover:!text-gray-900 dark:group-hover:!text-gray-900">{child.label}</span>
                               </button>
                             )
                           ))}

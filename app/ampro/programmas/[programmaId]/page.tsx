@@ -236,7 +236,7 @@ export default function AmproProgrammaDetailPage() {
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 sticky top-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-4">Apply</h3>
 
-                <div className="mb-4 p-4 bg-blue-50 border border-gray-200 rounded-3xl">
+                <div className="mb-4 p-4 bg-blue-50 dark:bg-zinc-900! border border-gray-200 rounded-3xl">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold text-gray-900">Status</span>
                     <span className="flex items-center pr-4 text-xl font-bold text-gray-900">

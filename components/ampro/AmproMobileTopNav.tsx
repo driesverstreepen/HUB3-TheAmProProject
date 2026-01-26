@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut, Menu, Moon, Sun, User } from 'lucide-react'
+import { LogOut, Menu, User } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import { MobileSidebar, type MobileSidebarSection } from '@/components/ui/MobileSidebar'
 import { supabase } from '@/lib/supabase'
-import { useTheme } from '@/contexts/ThemeContext'
 import { isAmproAdmin } from '@/lib/ampro'
 
 export default function AmproMobileTopNav() {
   const router = useRouter()
-  const { theme, toggle } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -131,14 +129,6 @@ export default function AmproMobileTopNav() {
                 },
               },
             ]),
-        {
-          label: theme === 'dark' ? 'Lichtmodus' : 'Donker modus',
-          onClick: () => {
-            toggle()
-            setMenuOpen(false)
-          },
-          icon: theme === 'dark' ? Sun : Moon,
-        },
         ...(isLoggedIn
           ? [
               {
@@ -162,12 +152,12 @@ export default function AmproMobileTopNav() {
   ]
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 overflow-hidden">
+    <nav className="bg-white sticky top-0 z-40 overflow-hidden">
       <div className="px-4">
         <div className="flex justify-between items-center h-12">
           <button
             onClick={() => setMenuOpen(true)}
-            className="p-2 rounded-md text-slate-700 hover:bg-slate-100"
+            className="p-2 rounded-md text-gray-700 hover:bg-gray-100"
             aria-label="Open menu"
           >
             <Menu className="w-6 h-6" />
@@ -182,7 +172,7 @@ export default function AmproMobileTopNav() {
         onClose={() => setMenuOpen(false)}
         onOpen={() => setMenuOpen(true)}
         sections={sections}
-        header={<div className="font-semibold text-slate-900">The AmProProject</div>}
+        header={<div className="font-semibold text-gray-900">The AmProProject</div>}
       />
     </nav>
   )

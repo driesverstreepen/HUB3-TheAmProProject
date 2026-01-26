@@ -20,7 +20,8 @@ export default function AmproPublicPerformances({
     return parts.map((part, i) =>
       part === 'HUB3' ? (
         <span key={i} className="font-extrabold">
-          {part}
+          <span>HUB</span>
+          <span className="text-blue-600">3</span>
         </span>
       ) : (
         <span key={i}>{part}</span>
@@ -94,7 +95,7 @@ export default function AmproPublicPerformances({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-linear-to-br from-gray-950 via-gray-800 to-gray-500 border-b border-gray-700">
+      <div className="bg-linear-to-br from-gray-950 via-gray-800 to-gray-500">
         <ContentContainer className="py-8">
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1 min-w-0">

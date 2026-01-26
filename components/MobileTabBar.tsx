@@ -28,7 +28,7 @@ export function MobileTabBar() {
   const visibleTabs = tabs.filter((t) => !t.featureKey || !isHidden(t.featureKey, false))
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
       <ul className="mx-auto grid max-w-xl grid-cols-4">
         {visibleTabs.map((t) => {
           const active = pathname === t.href || (t.href !== '/dashboard' && pathname?.startsWith(t.href))

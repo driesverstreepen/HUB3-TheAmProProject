@@ -34,7 +34,7 @@ export default function StartPage() {
   }, [])
 
   return (
-    <div className="min-h-screen flex items-center bg-blue-500 text-white">
+    <div className="min-h-screen flex items-center bg-blue-500! text-white">
       <div className="relative overflow-hidden w-full">
         <div className="">
           <ContentContainer>
@@ -47,7 +47,7 @@ export default function StartPage() {
 
               <p className="max-w-2xl text-slate-100 mb-20">Van beginners tot professionals. Ontdek studios, boek lessen en beheer alles op één plek.</p>
 
-              <Link href="/signup" className="inline-flex items-center gap-3 bg-white text-blue-600 px-8 py-4 mb-4 rounded-full shadow-lg font-semibold hover:bg-blue-700 hover:text-gray-50 transition-colors">
+              <Link href="/signup" className="inline-flex items-center gap-3 bg-white! text-blue-600! px-8 py-4 mb-4 rounded-full shadow-lg font-semibold hover:bg-blue-700! hover:text-gray-50! transition-colors">
                 The AmProProject
                 <span aria-hidden>→</span>
               </Link>

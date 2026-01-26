@@ -56,7 +56,7 @@ export default function UserLayout({
 
 function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ children: React.ReactNode, showSidebar: boolean, excludeFooter: boolean, pathname: string | null }) {
   // use theme from context and apply top-level .dark class when needed
-  const { theme, setTheme } = useTheme()
+  const { theme } = useTheme()
   const { isMobile } = useDevice()
   const isAmproMode = true
 
@@ -72,18 +72,6 @@ function InnerLayout({ children, showSidebar, excludeFooter, pathname }:{ childr
       // ignore
     }
   }, [pathname])
-
-  // Force light theme on the public welcome page so the landing cannot be dark.
-  // This affects only the root public welcome page (/) — interface and HUB pages keep user theme.
-  React.useEffect(() => {
-    try {
-      if (pathname === '/') {
-        setTheme('light')
-      }
-    } catch {
-      // ignore
-    }
-  }, [pathname, setTheme])
 
   // Studio public pages should use the HUB top navigation
   if (pathname?.startsWith('/studio/public')) {

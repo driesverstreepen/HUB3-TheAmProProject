@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, Moon, Sun, User, Check } from 'lucide-react'
+import { LogOut, User, Check } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import { supabase } from '@/lib/supabase'
-import { useTheme } from '@/contexts/ThemeContext'
 import { isAmproAdmin } from '@/lib/ampro'
 
 export default function AmproTopNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const { theme, toggle } = useTheme()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -90,7 +88,7 @@ export default function AmproTopNav() {
   ]
 
   return (
-    <nav className="bg-white border-b border-gray-200 nav-surface sticky top-0 z-40">
+    <nav className="bg-white nav-surface sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex space-x-8">
@@ -154,15 +152,6 @@ export default function AmproTopNav() {
                   </button>
                 </>
               )}
-
-              <button
-                onClick={toggle}
-                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                title={theme === 'dark' ? 'Schakel lichtmodus in' : 'Schakel donker modus in'}
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
 
               {isLoggedIn ? (
                 showLogoutConfirm ? (
