@@ -27,6 +27,7 @@
     "New-Item": true,
     "Out-Null": true,
     "Move-Item": true,
-    "ForEach-Object": true
+    "ForEach-Object": true,
+    "Get-Process": true
   }
 }

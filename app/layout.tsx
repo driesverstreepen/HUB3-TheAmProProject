@@ -7,6 +7,7 @@ import { createSupabaseServiceClient } from '@/lib/supabase'
 import { defaultTypographyConfig, normalizeTypographyConfig, typographyConfigToCss } from '@/lib/typography'
 import { unstable_noStore as noStore } from 'next/cache'
 import TypographyLiveSync from '@/components/TypographyLiveSync'
+import ScrollbarsOnScroll from './ScrollbarsOnScroll'
 
 export const metadata: Metadata = {
   title: 'HUB3',
@@ -74,6 +75,7 @@ export default async function RootLayout({
         ) : null}
       </head>
       <body className="font-sans antialiased">
+        <ScrollbarsOnScroll />
         <style id="hub3-typography-vars">{typographyCss}</style>
         {!isAmpro ? <TypographyLiveSync /> : null}
         <Suspense fallback={<div className="min-h-screen bg-white" />}>

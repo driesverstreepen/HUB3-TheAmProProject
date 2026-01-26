@@ -24,6 +24,54 @@ body {
   background: #ffffff;
 }
 
+/* Scrollbars: hidden by default, shown briefly while scrolling.
+   We toggle `body.show-scrollbars` via a small client listener.
+   Notes: we intentionally exclude form controls so textarea/select scrollbars remain usable. */
+:root {
+  --app-scrollbar-size: 10px;
+  --app-scrollbar-thumb: rgba(15, 23, 42, 0.28); /* slate-900-ish */
+  --app-scrollbar-thumb-hover: rgba(15, 23, 42, 0.42);
+}
+
+body.dark {
+  --app-scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --app-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+}
+
+body :where(*):not(textarea):not(input):not(select) {
+  scrollbar-width: none; /* Firefox */
+}
+
+body :where(*):not(textarea):not(input):not(select)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+body.show-scrollbars :where(*):not(textarea):not(input):not(select) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) transparent;
+}
+
+body.show-scrollbars :where(*):not(textarea):not(input):not(select)::-webkit-scrollbar {
+  width: var(--app-scrollbar-size);
+  height: var(--app-scrollbar-size);
+}
+
+body.show-scrollbars :where(*):not(textarea):not(input):not(select)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.show-scrollbars :where(*):not(textarea):not(input):not(select)::-webkit-scrollbar-thumb {
+  background-color: var(--app-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+body.show-scrollbars :where(*):not(textarea):not(input):not(select)::-webkit-scrollbar-thumb:hover {
+  background-color: var(--app-scrollbar-thumb-hover);
+}
+
 /* Force form controls to use dark text on light/white backgrounds across the app.
    This ensures inputs/selects/textareas remain readable when placed on white cards.
    Specific components can still override these with a more specific class if needed. */
@@ -70,32 +118,8 @@ body.dark {
   background: #000; /* black background */
 }
 
-/* Scrollbars: avoid white tracks in dark mode (desktop + horizontal scrollers). */
-body.dark,
-.dark {
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent; /* thumb track */
-  scrollbar-width: thin;
-}
-body.dark *::-webkit-scrollbar,
-.dark *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-body.dark *::-webkit-scrollbar-track,
-.dark *::-webkit-scrollbar-track {
-  background: transparent;
-}
-body.dark *::-webkit-scrollbar-thumb,
-.dark *::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-body.dark *::-webkit-scrollbar-thumb:hover,
-.dark *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.28);
-}
+/* Dark-mode scrollbar styling is handled via CSS vars above and only becomes visible
+   when `body.show-scrollbars` is present. */
 
 /* Ensure top-level page wrappers that rely on Tailwind utilities become
    fully black in dark mode. Target common combinations like `min-h-screen

@@ -76,12 +76,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Fetch dates and user's responses + assignment info
     const datesResp = await admin
       .from('ampro_availability_request_dates')
-      .select('id,request_id,day')
+      .select('id,request_id,day,location_id')
       .eq('request_id', requestRow.id)
       .order('day', { ascending: true })
 
     if (datesResp.error) throw datesResp.error
     const dates = datesResp.data || []
+
+    const locationIds = Array.from(
+      new Set(
+        (dates || [])
+          .map((d: any) => (d as any)?.location_id)
+          .filter(Boolean)
+          .map((v: any) => String(v)),
+      ),
+    )
+
+    const locationsResp = locationIds.length
+      ? await admin.from('ampro_locations').select('id,name,address').in('id', locationIds)
+      : ({ data: [], error: null } as any)
+
+    if (locationsResp.error) throw locationsResp.error
+    const dateLocations = locationsResp.data || []
 
     const dateIds = (dates || []).map((d: any) => d.id).filter(Boolean)
 
@@ -107,7 +123,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (assignedResp.error) throw assignedResp.error
     const isAssigned = Array.isArray(assignedResp.data) && assignedResp.data.length > 0
 
-    return NextResponse.json({ request: requestRow, dates, responses, isAssignedToRequest: isAssigned })
+    return NextResponse.json({ request: requestRow, dates, responses, isAssignedToRequest: isAssigned, dateLocations })
   } catch (err: any) {
     console.error('Error in availability API:', err)
     return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 })

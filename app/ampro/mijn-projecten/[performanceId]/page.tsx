@@ -61,6 +61,7 @@ type AvailabilityDateRow = {
   id: string
   request_id: string
   day: string
+  location_id?: string | null
 }
 
 type AvailabilityResponseRow = {
@@ -100,6 +101,7 @@ export default function AmproMijnProjectenDetailPage() {
 
   const [availabilityRequest, setAvailabilityRequest] = useState<AvailabilityRequestRow | null>(null)
   const [availabilityDates, setAvailabilityDates] = useState<AvailabilityDateRow[]>([])
+  const [availabilityDateLocationsById, setAvailabilityDateLocationsById] = useState<Record<string, LocationRow>>({})
   const [availabilityDraft, setAvailabilityDraft] = useState<Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }>>({})
   const [savingAvailability, setSavingAvailability] = useState(false)
   const [hasAnyAvailabilityResponse, setHasAnyAvailabilityResponseState] = useState<boolean>(false)
@@ -204,6 +206,7 @@ export default function AmproMijnProjectenDetailPage() {
         let dates: AvailabilityDateRow[] = []
         let draft: Record<string, { status: 'yes' | 'no' | 'maybe'; comment: string }> = {}
         let anyResponse = false
+        let dateLocationMap: Record<string, LocationRow> = {}
 
         try {
           const resp = await fetch(`/api/ampro/availability/${encodeURIComponent(performanceId)}`, {
@@ -217,8 +220,21 @@ export default function AmproMijnProjectenDetailPage() {
             const req = json.request
             const fetchedDates = Array.isArray(json.dates) ? json.dates : []
             const fetchedResponses = Array.isArray(json.responses) ? json.responses : []
+            const fetchedDateLocations = Array.isArray(json.dateLocations) ? json.dateLocations : []
 
             dates = fetchedDates as any
+
+            const locMap: Record<string, LocationRow> = {}
+            for (const l of fetchedDateLocations) {
+              const id = String((l as any)?.id || '')
+              if (!id) continue
+              locMap[id] = {
+                id,
+                name: String((l as any)?.name || id),
+                address: (l as any)?.address ? String((l as any).address) : null,
+              }
+            }
+            dateLocationMap = locMap
 
             const byDateId: Record<string, AvailabilityResponseRow> = {}
             for (const r of fetchedResponses) {
@@ -252,6 +268,7 @@ export default function AmproMijnProjectenDetailPage() {
           setCorrections((correctionsResp.data as any) || [])
           // availabilityRequest is set earlier when the server API returns data
           setAvailabilityDates(dates)
+          setAvailabilityDateLocationsById(dateLocationMap)
           setAvailabilityDraft(draft)
           setHasAnyAvailabilityResponseState(anyResponse)
         }
@@ -334,6 +351,11 @@ export default function AmproMijnProjectenDetailPage() {
       (Boolean((availabilityRequest as any)?.responses_locked) ||
         (availabilityRequest as any)?.responses_lock_at && isISODatePast(String((availabilityRequest as any).responses_lock_at))),
   )
+
+  const availabilityIsVisibleToUsers = Boolean(availabilityRequest?.is_visible)
+  const availabilityHasRequest = Boolean(availabilityRequest?.id)
+  const availabilityCanSeeRequest = availabilityIsVisibleToUsers && isAssignedToRequest
+  const availabilityShouldShowRequest = availabilityHasRequest && availabilityDates.length > 0 && (hasAnyAvailabilityResponse || availabilityCanSeeRequest)
 
   const canEditAvailability = Boolean(
     availabilityRequest?.id && !availabilityLocked && (availabilityRequest?.is_visible || hasAnyAvailabilityResponse || isAssignedToRequest),
@@ -629,7 +651,7 @@ export default function AmproMijnProjectenDetailPage() {
                   <ChevronDown className={`h-5 w-5 transform transition-transform ${availabilityOpen ? 'rotate-180' : ''}`} />
                 </button>
               </div>
-              {availabilityRequest?.id ? (
+              {availabilityRequest?.id && (availabilityCanSeeRequest || hasAnyAvailabilityResponse) ? (
                 <div className="mb-4">
                   {hasAnyAvailabilityResponse ? (
                     <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
@@ -647,8 +669,10 @@ export default function AmproMijnProjectenDetailPage() {
                 <>
                   {!availabilityRequest?.id ? (
                     <div className="text-sm text-gray-600">Er is momenteel geen beschikbaarheidsvraag.</div>
-                  ) : availabilityDates.length === 0 ? (
-                    <div className="text-sm text-gray-600">Geen data ingesteld.</div>
+                  ) : !availabilityShouldShowRequest ? (
+                    <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                      Er wordt momenteel geen beschikbaarheid gevraagd.
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       {!canEditAvailability ? (
@@ -658,9 +682,20 @@ export default function AmproMijnProjectenDetailPage() {
                       ) : null}
                       {availabilityDates.map((d) => {
                         const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
+                        const dateLocId = (d as any)?.location_id ? String((d as any).location_id) : ''
+                        const dateLoc = dateLocId ? availabilityDateLocationsById[dateLocId] : null
                         return (
                           <div key={d.id} className="rounded-3xl border border-gray-200 p-4">
                             <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                            {dateLoc ? (
+                              <div className="mt-1 flex items-start gap-2 text-xs text-gray-600">
+                                <MapPin className="h-3.5 w-3.5 text-gray-400 mt-0.5" />
+                                <div className="min-w-0">
+                                  <div className="text-gray-900 font-semibold truncate">{dateLoc.name}</div>
+                                  {dateLoc.address ? <div className="whitespace-pre-wrap">{dateLoc.address}</div> : null}
+                                </div>
+                              </div>
+                            ) : null}
 
                             <div className="mt-3 grid gap-3">
                               <label className="grid gap-1 text-sm font-medium text-gray-700">

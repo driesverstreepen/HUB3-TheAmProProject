@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2, GripVertical } from 'lucide-react'
@@ -478,11 +478,21 @@ export default function AmproAdminPage() {
   const [availabilityLocked, setAvailabilityLocked] = useState(false)
   const [availabilityLockAt, setAvailabilityLockAt] = useState('')
   const [availabilityDatesText, setAvailabilityDatesText] = useState('')
+  const [availabilityLocationByDay, setAvailabilityLocationByDay] = useState<Record<string, string>>({})
   const [availabilitySelectedUserIds, setAvailabilitySelectedUserIds] = useState<string[]>([])
   const [availabilityOverview, setAvailabilityOverview] = useState<
-    Array<{ day: string; rows: Array<{ user_id: string; status: string | null; comment: string | null }> }>
+    Array<{ day: string; location_id: string | null; rows: Array<{ user_id: string; status: string | null; comment: string | null }> }>
   >([])
   const [savingAvailability, setSavingAvailability] = useState(false)
+
+  const parsedAvailabilityDays = useMemo(() => {
+    try {
+      const days = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
+      return { days, error: '' }
+    } catch (e: any) {
+      return { days: [] as string[], error: String(e?.message || 'Ongeldige datum') }
+    }
+  }, [availabilityDatesText])
 
   useEffect(() => {
     if (!availabilityPerformanceId && performances.length) {
@@ -507,6 +517,7 @@ export default function AmproAdminPage() {
       setAvailabilityLocked(false)
       setAvailabilityLockAt('')
       setAvailabilityDatesText('')
+      setAvailabilityLocationByDay({})
       setAvailabilitySelectedUserIds([])
       setAvailabilityOverview([])
 
@@ -527,6 +538,7 @@ export default function AmproAdminPage() {
         setAvailabilityLocked(false)
         setAvailabilityLockAt('')
         setAvailabilityDatesText('')
+        setAvailabilityLocationByDay({})
         setAvailabilitySelectedUserIds(acceptedUserIdsForSelectedPerformance)
         setAvailabilityOverview([])
         return
@@ -544,13 +556,22 @@ export default function AmproAdminPage() {
 
       const datesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day')
+        .select('id,day,location_id')
         .eq('request_id', requestId)
         .order('day', { ascending: true })
 
       if (datesResp.error) throw datesResp.error
       const dates = (datesResp.data as any[]) || []
       setAvailabilityDatesText(dates.map((d) => formatDateOnlyFromISODate(String(d.day))).join('\n'))
+      setAvailabilityLocationByDay(() => {
+        const map: Record<string, string> = {}
+        for (const d of dates) {
+          const day = String((d as any)?.day || '')
+          const loc = (d as any)?.location_id
+          if (day && loc) map[day] = String(loc)
+        }
+        return map
+      })
 
       const dateIds = dates.map((d) => String(d.id)).filter(Boolean)
       if (!dateIds.length) {
@@ -584,6 +605,7 @@ export default function AmproAdminPage() {
 
       const overview = dates.map((d) => {
         const day = String(d.day)
+        const locationId = (d as any)?.location_id ? String((d as any).location_id) : null
         const usersForDate = assigned
           .filter((a) => String(a.request_date_id) === String(d.id))
           .map((a) => {
@@ -593,7 +615,7 @@ export default function AmproAdminPage() {
             return { user_id: uid, status: rr?.status ?? null, comment: rr?.comment ?? null }
           })
 
-        return { day, rows: usersForDate }
+        return { day, location_id: locationId, rows: usersForDate }
       })
 
       setAvailabilityOverview(overview)
@@ -618,6 +640,12 @@ export default function AmproAdminPage() {
 
       const desiredDays = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
       if (!desiredDays.length) throw new Error('Voeg minstens 1 datum toe')
+
+      const desiredLocationByDay: Record<string, string> = {}
+      for (const day of desiredDays) {
+        const loc = String((availabilityLocationByDay || {})[day] || '').trim()
+        if (loc) desiredLocationByDay[day] = loc
+      }
 
       const selectedUserIds = Array.from(new Set((availabilitySelectedUserIds || []).map(String).filter(Boolean)))
       if (!selectedUserIds.length) throw new Error('Selecteer minstens 1 user')
@@ -655,7 +683,7 @@ export default function AmproAdminPage() {
 
       const existingDatesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day')
+        .select('id,day,location_id')
         .eq('request_id', requestId)
       if (existingDatesResp.error) throw existingDatesResp.error
 
@@ -679,14 +707,33 @@ export default function AmproAdminPage() {
       if (toAddDays.length) {
         const insDates = await supabase
           .from('ampro_availability_request_dates')
-          .insert(toAddDays.map((day) => ({ request_id: requestId, day })))
+          .insert(toAddDays.map((day) => ({ request_id: requestId, day, location_id: desiredLocationByDay[day] || null })))
         if (insDates.error) throw insDates.error
+      }
+
+      // Update per-day location for existing dates (best-effort)
+      for (const d of existingDates) {
+        const day = String((d as any)?.day || '')
+        if (!day) continue
+        if (!desiredDays.includes(day)) continue
+        const id = String((d as any)?.id || '')
+        if (!id) continue
+
+        const desiredLoc = desiredLocationByDay[day] || null
+        const currentLoc = (d as any)?.location_id ? String((d as any).location_id) : null
+        if (String(desiredLoc || '') === String(currentLoc || '')) continue
+
+        const upLoc = await supabase
+          .from('ampro_availability_request_dates')
+          .update({ location_id: desiredLoc })
+          .eq('id', id)
+        if (upLoc.error) throw upLoc.error
       }
 
       // Reload dates to get all ids
       const allDatesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day')
+        .select('id,day,location_id')
         .eq('request_id', requestId)
       if (allDatesResp.error) throw allDatesResp.error
       const allDates = (allDatesResp.data as any[]) || []
@@ -1869,7 +1916,7 @@ export default function AmproAdminPage() {
                     onChange={(e) => setNewProgramType(e.target.value as any)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="performance">Performance</option>
+                    <option value="performance">Voorstelling Project</option>
                     <option value="workshop">Workshop</option>
                   </select>
                 </label>
@@ -3339,6 +3386,52 @@ export default function AmproAdminPage() {
                       </label>
 
                       <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                        <div className="text-sm font-semibold text-gray-900">Locatie per datum (optioneel)</div>
+                        <div className="mt-1 text-xs text-gray-600">Kies een locatie uit je aangemaakte locaties. Laat leeg als het niet van toepassing is.</div>
+
+                        {parsedAvailabilityDays.error ? (
+                          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            {parsedAvailabilityDays.error}
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3 grid gap-2">
+                          {parsedAvailabilityDays.days.map((day) => {
+                            const value = availabilityLocationByDay[day] || ''
+                            return (
+                              <div key={day} className="grid grid-cols-1 md:grid-cols-2 gap-2 items-center">
+                                <div className="text-sm font-medium text-gray-700">{formatDateOnlyFromISODate(day)}</div>
+                                <select
+                                  value={value}
+                                  onChange={(e) => {
+                                    const next = String(e.target.value || '')
+                                    setAvailabilityLocationByDay((prev) => {
+                                      const out = { ...(prev || {}) }
+                                      if (!next) delete out[day]
+                                      else out[day] = next
+                                      return out
+                                    })
+                                  }}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                >
+                                  <option value="">— geen locatie —</option>
+                                  {locations.map((l: any) => (
+                                    <option key={String(l.id)} value={String(l.id)}>
+                                      {String(l.name || l.id)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )
+                          })}
+
+                          {parsedAvailabilityDays.days.length === 0 && !parsedAvailabilityDays.error ? (
+                            <div className="text-sm text-gray-600">Voeg eerst minstens 1 datum toe.</div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl border border-gray-200 bg-white p-4">
                         <div className="flex items-center justify-between">
                           <div className="text-sm font-semibold text-gray-900">Users (accepted)</div>
                           <div>
@@ -3420,6 +3513,11 @@ export default function AmproAdminPage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                                  {d.location_id ? (
+                                    <div className="mt-0.5 text-xs text-gray-600">
+                                      Locatie: <span className="font-semibold text-gray-900">{locationNameById[String(d.location_id)] || String(d.location_id)}</span>
+                                    </div>
+                                  ) : null}
                                   <div className="mt-0.5 text-xs text-gray-600">
                                     Beschikbaar: <span className="font-semibold text-gray-900">{availableCount}</span>
                                     {total ? ` / ${total}` : ''}
