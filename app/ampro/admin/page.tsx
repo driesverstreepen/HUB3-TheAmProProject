@@ -2195,7 +2195,7 @@ export default function AmproAdminPage() {
   })()
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
         <div className="flex min-h-0 flex-1 flex-col border-r border-gray-200 bg-white">
           <div className="px-5 py-5">
@@ -2266,8 +2266,8 @@ export default function AmproAdminPage() {
           />
         </nav>
 
-        <main className="p-4 md:p-6 lg:p-8">
-          <div className="mx-auto max-w-5xl">
+        <main className="p-4 md:p-6 lg:p-8 overflow-x-hidden">
+          <div className="mx-auto max-w-5xl w-full min-w-0">
             <Modal
               isOpen={programmaModalOpen}
               onClose={() => setProgrammaModalOpen(false)}

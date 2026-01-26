@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import React, { Suspense } from 'react'
 import UserLayoutWrapper from './UserLayoutWrapper'
@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: 'HUB3',
   description: 'Het next level dansnetwerk',
   manifest: '/manifest.webmanifest',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+  ],
   icons: {
     icon: [
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -19,6 +23,15 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-touch-icon.png'
   },
+}
+
+// Disable zoom (especially on mobile) and enable iOS safe-area (notch) support.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 }
 
 export default async function RootLayout({
@@ -65,9 +78,6 @@ export default async function RootLayout({
   return (
     <html lang="nl">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc" />
-        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
         {siteLogoUrl ? (
           <>
             <link rel="apple-touch-icon" sizes="180x180" href={siteLogoUrl} />

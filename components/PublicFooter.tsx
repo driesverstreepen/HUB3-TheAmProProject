@@ -42,8 +42,7 @@ export const PublicFooter: React.FC = () => {
               <div className="text-sm font-semibold text-gray-900">HUB<p className='text-blue-600 inline'>3</p></div>
             )}
 
-            <div className="text-sm">
-              <div className="font-medium text-gray-900">HUB<p className='text-blue-600 inline'>3</p></div>
+            <div className="text-sm">              
               {supportEmail && (
                 <a href={`mailto:${supportEmail}`} className="text-xs text-gray-600 hover:underline">{supportEmail}</a>
               )}
