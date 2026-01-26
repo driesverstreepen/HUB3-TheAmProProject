@@ -86,6 +86,7 @@ type FormFieldDraft = {
   type: AmproFormField['type']
   required: boolean
   placeholder: string
+  text: string
   options: FormOptionDraft[]
 }
 
@@ -96,6 +97,7 @@ function makeEmptyFieldDraft(): FormFieldDraft {
     type: 'text',
     required: false,
     placeholder: '',
+    text: '',
     options: [{ id: makeId(), label: '', value: '' }],
   }
 }
@@ -764,6 +766,26 @@ export default function AmproAdminPage() {
   const [newFormFields, setNewFormFields] = useState<FormFieldDraft[]>([])
   const [savingForm, setSavingForm] = useState(false)
   const [editingFormId, setEditingFormId] = useState<string | null>(null)
+  const [collapsedFormFieldById, setCollapsedFormFieldById] = useState<Record<string, boolean>>({})
+
+  function toggleFormFieldCollapsed(id: string) {
+    const key = String(id || '')
+    if (!key) return
+    setCollapsedFormFieldById((prev) => ({ ...prev, [key]: !Boolean(prev[key]) }))
+  }
+
+  function handleFormFieldsDragEnd(event: DragEndEvent) {
+    const activeId = String(event.active?.id || '')
+    const overId = String(event.over?.id || '')
+    if (!activeId || !overId || activeId === overId) return
+
+    setNewFormFields((prev) => {
+      const oldIndex = prev.findIndex((x) => String(x?.id || '') === activeId)
+      const newIndex = prev.findIndex((x) => String(x?.id || '') === overId)
+      if (oldIndex < 0 || newIndex < 0) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
 
   const [newLocationName, setNewLocationName] = useState('')
   const [newLocationAddress, setNewLocationAddress] = useState('')
@@ -806,7 +828,7 @@ export default function AmproAdminPage() {
         const perfResp = await supabase
           .from('ampro_programmas')
           .select(
-            'id,title,description,program_type,is_public,applications_open,application_deadline,created_at,rehearsal_period_start,rehearsal_period_end,performance_dates,region,location_id',
+            'id,title,description,program_type,is_public,applications_open,application_deadline,created_at,rehearsal_period_start,rehearsal_period_end,performance_dates,region,location_id,price,admin_payment_url',
           )
           .order('created_at', { ascending: false })
         if (perfResp.error) throw perfResp.error
@@ -1199,12 +1221,31 @@ export default function AmproAdminPage() {
       if (!newFormFields.length) throw new Error('Voeg minstens 1 veld toe')
 
       const keySet = new Set<string>()
-      const built: AmproFormField[] = newFormFields.map((f) => {
+      const built: AmproFormField[] = newFormFields.map((f, idx) => {
+        const type = f.type
         const label = (f.label || '').trim()
+
+        if (type === 'title') {
+          if (!label) throw new Error('Titel veld moet een label hebben')
+          const key = uniqueKey(label, keySet, 'title')
+          return { key, label, type: 'title' } as AmproFormField
+        }
+
+        if (type === 'info') {
+          const infoKeyBase = label || `info_${idx + 1}`
+          const key = uniqueKey(infoKeyBase, keySet, 'info')
+          return {
+            key,
+            label: label || 'Info',
+            type: 'info',
+            text: (f.text || '').trim() || undefined,
+          } as AmproFormField
+        }
+
         if (!label) throw new Error('Elk veld moet een label hebben')
         const key = uniqueKey(label, keySet)
 
-        if (f.type === 'select') {
+        if (type === 'select') {
           const options = (f.options || [])
             .map((o, idx) => {
               const optLabel = (o.label || '').trim()
@@ -1228,7 +1269,7 @@ export default function AmproAdminPage() {
           }
         }
 
-        if (f.type === 'checkbox') {
+        if (type === 'checkbox') {
           return {
             key,
             label,
@@ -1240,7 +1281,7 @@ export default function AmproAdminPage() {
         return {
           key,
           label,
-          type: f.type as any,
+          type: type as any,
           required: Boolean(f.required),
           placeholder: (f.placeholder || '').trim() || undefined,
         }
@@ -1955,7 +1996,7 @@ export default function AmproAdminPage() {
                 </div>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Data (meerdere toegestaan)
+                  Data voorstellingen
                   <textarea
                     value={newPerformanceDates}
                     onChange={(e) => setNewPerformanceDates(e.target.value)}
@@ -2005,6 +2046,7 @@ export default function AmproAdminPage() {
               onClose={() => {
                 setFormModalOpen(false)
                 setEditingFormId(null)
+                setCollapsedFormFieldById({})
               }}
               ariaLabel={editingFormId ? 'Formulier bewerken' : 'Nieuwe form'}
               contentStyle={{ maxWidth: 760 }}
@@ -2040,193 +2082,250 @@ export default function AmproAdminPage() {
                     <div className="mt-3 text-sm text-gray-600">Nog geen velden. Klik op “Veld toevoegen”.</div>
                   ) : null}
 
-                  <div className="mt-4 grid gap-3">
-                    {newFormFields.map((field, idx) => {
-                      const showPlaceholder = field.type === 'text' || field.type === 'textarea' || field.type === 'date'
-                      const isSelect = field.type === 'select'
+                  <div className="mt-4">
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFormFieldsDragEnd}>
+                      <SortableContext items={newFormFields.map((f) => String(f.id))} strategy={verticalListSortingStrategy}>
+                        <div className="grid gap-3">
+                          {newFormFields.map((field, idx) => {
+                            const showPlaceholder = field.type === 'text' || field.type === 'textarea' || field.type === 'date'
+                            const isSelect = field.type === 'select'
+                            const isInfo = field.type === 'info'
+                            const isTitle = field.type === 'title'
+                            const isAnswerField = !isInfo && !isTitle
+                            const isCollapsed = Boolean(collapsedFormFieldById[String(field.id)])
 
-                      return (
-                        <div key={field.id} className="rounded-3xl border border-gray-200 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm font-semibold text-gray-900">Veld {idx + 1}</div>
-                            <button
-                              type="button"
-                              onClick={() => setNewFormFields((prev) => prev.filter((f) => f.id !== field.id))}
-                              className="text-sm font-semibold text-red-700 hover:text-red-800"
-                            >
-                              Verwijder
-                            </button>
-                          </div>
+                            const labelPreview = (field.label || '').trim()
+                            const title = labelPreview ? labelPreview : `Veld ${idx + 1}`
+                            const metaParts = [
+                              isTitle ? 'Titel' : isInfo ? 'Info' : `Type: ${field.type}`,
+                              isAnswerField && field.required ? 'Verplicht' : null,
+                            ].filter(Boolean)
 
-                          <div className="mt-3 grid gap-3">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                Label
-                                <input
-                                  value={field.label}
-                                  onChange={(e) => {
-                                    const nextLabel = e.target.value
-                                    setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, label: nextLabel } : f)))
-                                  }}
-                                  placeholder="bv. Ervaring"
-                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
-                                />
-                              </label>
+                            return (
+                              <SortableCardItem key={field.id} id={String(field.id)}>
+                                <div className="rounded-3xl border border-gray-200 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleFormFieldCollapsed(field.id)}
+                                      className="text-left min-w-0"
+                                      aria-expanded={!isCollapsed}
+                                    >
+                                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                        <span className="truncate">{title}</span>
+                                      </div>
+                                      {metaParts.length ? (
+                                        <div className="mt-1 text-xs text-gray-500">{metaParts.join(' · ')}</div>
+                                      ) : null}
+                                    </button>
 
-                              <div className="grid gap-1 text-sm font-medium text-gray-700">
-                                Key
-                                <div className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-sm flex items-center text-gray-600">
-                                  Automatisch
-                                </div>
-                              </div>
-                            </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setNewFormFields((prev) => prev.filter((f) => f.id !== field.id))}
+                                      className="text-sm font-semibold text-red-700 hover:text-red-800 shrink-0"
+                                    >
+                                      Verwijder
+                                    </button>
+                                  </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                Type
-                                <select
-                                  value={field.type}
-                                  onChange={(e) => {
-                                    const nextType = e.target.value as AmproFormField['type']
-                                    setNewFormFields((prev) =>
-                                      prev.map((f) => {
-                                        if (f.id !== field.id) return f
-                                        return {
-                                          ...f,
-                                          type: nextType,
-                                          placeholder: nextType === 'text' || nextType === 'textarea' || nextType === 'date' ? f.placeholder : '',
-                                          options:
-                                            nextType === 'select'
-                                              ? (f.options?.length ? f.options : [{ id: makeId(), label: '', value: '' }])
-                                              : [],
-                                        }
-                                      }),
-                                    )
-                                  }}
-                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
-                                >
-                                  <option value="text">Tekst</option>
-                                  <option value="textarea">Tekstvak (groot)</option>
-                                  <option value="date">Datum</option>
-                                  <option value="select">Keuzelijst</option>
-                                  <option value="checkbox">Checkbox</option>
-                                </select>
-                              </label>
+                                  {!isCollapsed ? (
+                                    <div className="mt-3 grid gap-3">
+                                      <div className="grid grid-cols-1 gap-3">
+                                        <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                          {isInfo ? 'Titel (optioneel)' : isTitle ? 'Titel' : 'Label'}
+                                          <input
+                                            value={field.label}
+                                            onChange={(e) => {
+                                              const nextLabel = e.target.value
+                                              setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, label: nextLabel } : f)))
+                                            }}
+                                            placeholder={isInfo ? 'bv. Belangrijk' : isTitle ? 'bv. Persoonlijke info' : 'bv. Ervaring'}
+                                            className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                          />
+                                        </label>
+                                      </div>
 
-                              <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 mt-7">
-                                <input
-                                  type="checkbox"
-                                  checked={field.required}
-                                  onChange={(e) =>
-                                    setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, required: e.target.checked } : f)))
-                                  }
-                                  className="h-4 w-4 rounded border-gray-300"
-                                />
-                                Verplicht
-                              </label>
-                            </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                          Type
+                                          <select
+                                            value={field.type}
+                                            onChange={(e) => {
+                                              const nextType = e.target.value as AmproFormField['type']
+                                              setNewFormFields((prev) =>
+                                                prev.map((f) => {
+                                                  if (f.id !== field.id) return f
+                                                  return {
+                                                    ...f,
+                                                    type: nextType,
+                                                    placeholder:
+                                                      nextType === 'text' || nextType === 'textarea' || nextType === 'date' ? f.placeholder : '',
+                                                    text: nextType === 'info' ? f.text : '',
+                                                    options:
+                                                      nextType === 'select'
+                                                        ? (f.options?.length ? f.options : [{ id: makeId(), label: '', value: '' }])
+                                                        : [],
+                                                    required: nextType === 'info' || nextType === 'title' ? false : f.required,
+                                                  }
+                                                }),
+                                              )
+                                            }}
+                                            className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                          >
+                                            <option value="text">Tekst</option>
+                                            <option value="textarea">Tekstvak (groot)</option>
+                                            <option value="date">Datum</option>
+                                            <option value="select">Keuzelijst</option>
+                                            <option value="checkbox">Checkbox</option>
+                                            <option value="title">Titel (sectie)</option>
+                                            <option value="info">Info tekst (geen input)</option>
+                                          </select>
+                                        </label>
 
-                            {showPlaceholder ? (
-                              <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                Placeholder (optioneel)
-                                <input
-                                  value={field.placeholder}
-                                  onChange={(e) =>
-                                    setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, placeholder: e.target.value } : f)))
-                                  }
-                                  placeholder="Tekst in het veld…"
-                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
-                                />
-                              </label>
-                            ) : null}
+                                        {isAnswerField ? (
+                                          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 mt-7">
+                                            <input
+                                              type="checkbox"
+                                              checked={field.required}
+                                              onChange={(e) =>
+                                                setNewFormFields((prev) =>
+                                                  prev.map((f) => (f.id === field.id ? { ...f, required: e.target.checked } : f)),
+                                                )
+                                              }
+                                              className="h-4 w-4 rounded border-gray-300"
+                                            />
+                                            Verplicht
+                                          </label>
+                                        ) : (
+                                          <div className="mt-7 text-xs text-gray-500">Geen input veld</div>
+                                        )}
+                                      </div>
 
-                            {isSelect ? (
-                              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-sm font-semibold text-gray-900">Opties</div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setNewFormFields((prev) =>
-                                        prev.map((f) =>
-                                          f.id === field.id
-                                            ? { ...f, options: [...(f.options || []), { id: makeId(), label: '', value: '' }] }
-                                            : f,
-                                        ),
-                                      )
-                                    }
-                                    className="text-sm font-semibold rounded-3xl text-blue-700 hover:text-blue-800"
-                                  >
-                                    + optie
-                                  </button>
-                                </div>
+                                      {isInfo ? (
+                                        <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                          Info tekst
+                                          <textarea
+                                            value={field.text}
+                                            onChange={(e) =>
+                                              setNewFormFields((prev) =>
+                                                prev.map((f) => (f.id === field.id ? { ...f, text: e.target.value } : f)),
+                                              )
+                                            }
+                                            placeholder="Tekst die op het formulier wordt getoond…"
+                                            className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                                          />
+                                        </label>
+                                      ) : null}
 
-                                <div className="mt-3 grid gap-2">
-                                  {(field.options || []).map((opt) => (
-                                    <div key={opt.id} className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-2 items-end">
-                                      <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                        Label
-                                        <input
-                                          value={opt.label}
-                                          onChange={(e) => {
-                                            const v = e.target.value
-                                            setNewFormFields((prev) =>
-                                              prev.map((f) => {
-                                                if (f.id !== field.id) return f
-                                                return {
-                                                  ...f,
-                                                  options: (f.options || []).map((o) => (o.id === opt.id ? { ...o, label: v } : o)),
-                                                }
-                                              }),
-                                            )
-                                          }}
-                                          className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
-                                        />
-                                      </label>
-                                      <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                        Value
-                                        <input
-                                          value={opt.value}
-                                          onChange={(e) => {
-                                            const v = e.target.value
-                                            setNewFormFields((prev) =>
-                                              prev.map((f) => {
-                                                if (f.id !== field.id) return f
-                                                return {
-                                                  ...f,
-                                                  options: (f.options || []).map((o) => (o.id === opt.id ? { ...o, value: v } : o)),
-                                                }
-                                              }),
-                                            )
-                                          }}
-                                          placeholder="(optioneel)"
-                                          className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
-                                        />
-                                      </label>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setNewFormFields((prev) =>
-                                            prev.map((f) => {
-                                              if (f.id !== field.id) return f
-                                              return { ...f, options: (f.options || []).filter((o) => o.id !== opt.id) }
-                                            }),
-                                          )
-                                        }
-                                        className="h-11 rounded-3xl px-3 text-sm font-semibold bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
-                                      >
-                                        Verwijder
-                                      </button>
+                                      {showPlaceholder ? (
+                                        <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                          Placeholder (optioneel)
+                                          <input
+                                            value={field.placeholder}
+                                            onChange={(e) =>
+                                              setNewFormFields((prev) =>
+                                                prev.map((f) => (f.id === field.id ? { ...f, placeholder: e.target.value } : f)),
+                                              )
+                                            }
+                                            placeholder="Tekst in het veld…"
+                                            className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                          />
+                                        </label>
+                                      ) : null}
+
+                                      {isSelect ? (
+                                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div className="text-sm font-semibold text-gray-900">Opties</div>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setNewFormFields((prev) =>
+                                                  prev.map((f) =>
+                                                    f.id === field.id
+                                                      ? { ...f, options: [...(f.options || []), { id: makeId(), label: '', value: '' }] }
+                                                      : f,
+                                                  ),
+                                                )
+                                              }
+                                              className="text-sm font-semibold rounded-3xl text-blue-700 hover:text-blue-800"
+                                            >
+                                              + optie
+                                            </button>
+                                          </div>
+
+                                          <div className="mt-3 grid gap-2">
+                                            {(field.options || []).map((opt) => (
+                                              <div key={opt.id} className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-2 items-end">
+                                                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                                  Label
+                                                  <input
+                                                    value={opt.label}
+                                                    onChange={(e) => {
+                                                      const v = e.target.value
+                                                      setNewFormFields((prev) =>
+                                                        prev.map((f) => {
+                                                          if (f.id !== field.id) return f
+                                                          return {
+                                                            ...f,
+                                                            options: (f.options || []).map((o) => (o.id === opt.id ? { ...o, label: v } : o)),
+                                                          }
+                                                        }),
+                                                      )
+                                                    }}
+                                                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                                  />
+                                                </label>
+                                                <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                                  Value
+                                                  <input
+                                                    value={opt.value}
+                                                    onChange={(e) => {
+                                                      const v = e.target.value
+                                                      setNewFormFields((prev) =>
+                                                        prev.map((f) => {
+                                                          if (f.id !== field.id) return f
+                                                          return {
+                                                            ...f,
+                                                            options: (f.options || []).map((o) => (o.id === opt.id ? { ...o, value: v } : o)),
+                                                          }
+                                                        }),
+                                                      )
+                                                    }}
+                                                    placeholder="(optioneel)"
+                                                    className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                                  />
+                                                </label>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setNewFormFields((prev) =>
+                                                      prev.map((f) => {
+                                                        if (f.id !== field.id) return f
+                                                        return { ...f, options: (f.options || []).filter((o) => o.id !== opt.id) }
+                                                      }),
+                                                    )
+                                                  }
+                                                  className="h-11 rounded-3xl px-3 text-sm font-semibold bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
+                                                >
+                                                  Verwijder
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <div className="mt-2 text-xs text-gray-600">Laat “Value” leeg om automatisch af te leiden uit het label.</div>
+                                        </div>
+                                      ) : null}
                                     </div>
-                                  ))}
+                                  ) : null}
                                 </div>
-                                <div className="mt-2 text-xs text-gray-600">Laat “Value” leeg om automatisch af te leiden uit het label.</div>
-                              </div>
-                            ) : null}
-                          </div>
+                              </SortableCardItem>
+                            )
+                          })}
                         </div>
-                      )
-                    })}
+                      </SortableContext>
+                    </DndContext>
                   </div>
                 </div>
 
@@ -2632,6 +2731,9 @@ export default function AmproAdminPage() {
                     const formId = formIdByProgramId[String(memberDetailApp.performance_id)]
                     const formRow = formId ? (forms || []).find((f: any) => String(f?.id) === String(formId)) : null
                     const formFields = parseAmproFormFields((formRow as any)?.fields_json)
+                    const answerFields = formFields.filter(
+                      (f) => f.type === 'text' || f.type === 'textarea' || f.type === 'date' || f.type === 'select' || f.type === 'checkbox',
+                    )
 
                     const formattedSnapshotRows: Array<{ label: string; value: string }> = [
                       { label: 'Voornaam', value: String(snapshot.first_name || '') },
@@ -2703,9 +2805,9 @@ export default function AmproAdminPage() {
                           <div className="text-sm font-semibold text-gray-900">Form gegevens</div>
                           <div className="mt-1 text-sm text-gray-600">{formRow?.name || 'Geen form gekoppeld'}</div>
 
-                          {formFields.length ? (
+                          {answerFields.length ? (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {formFields.map((f) => (
+                              {answerFields.map((f) => (
                                 <div key={f.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                   <div className="text-xs font-semibold text-gray-600">{f.label}</div>
                                   <div className="mt-1 text-sm font-semibold text-gray-900 wrap-break-word">
@@ -2898,6 +3000,7 @@ export default function AmproAdminPage() {
                       setEditingFormId(null)
                       setNewFormName('')
                       setNewFormFields([makeEmptyFieldDraft()])
+                      setCollapsedFormFieldById({})
                       setFormModalOpen(true)
                     }}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
@@ -2930,6 +3033,7 @@ export default function AmproAdminPage() {
                                 // open modal in edit mode
                                 setEditingFormId(String(f.id))
                                 setNewFormName(String(f.name || ''))
+                                setCollapsedFormFieldById({})
                                 const rawFields = Array.isArray((f as any)?.fields_json) ? ((f as any).fields_json as any[]) : []
                                 const mapped: FormFieldDraft[] = rawFields.map((rf) => ({
                                   id: makeId(),
@@ -2937,6 +3041,7 @@ export default function AmproAdminPage() {
                                   type: (rf.type as any) || 'text',
                                   required: Boolean(rf.required),
                                   placeholder: String(rf.placeholder || '') || '',
+                                  text: String(rf.text || '') || '',
                                   options: Array.isArray(rf.options)
                                     ? rf.options.map((o: any) => ({ id: makeId(), label: String(o.label || ''), value: String(o.value || '') }))
                                     : [{ id: makeId(), label: '', value: '' }],
@@ -3306,29 +3411,43 @@ export default function AmproAdminPage() {
                     <div className="text-sm font-semibold text-gray-900">Overzicht</div>
                     <div className="mt-4 grid gap-3">
                       {availabilityRequestId ? (
-                        availabilityOverview.map((d) => (
-                          <div key={d.day} className="rounded-3xl border border-gray-200 p-4">
-                            <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
-                            <div className="mt-3 grid gap-2">
-                              {d.rows.map((r) => {
-                                const profile = profilesByUserId[String(r.user_id)]
-                                const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(r.user_id)
-                                return (
-                                  <div key={String(r.user_id)} className="rounded-2xl border border-gray-200 px-3 py-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
-                                      <div className="text-xs font-semibold text-gray-700">{availabilityStatusLabel(r.status)}</div>
-                                    </div>
-                                    {r.comment ? <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{r.comment}</div> : null}
+                        availabilityOverview.map((d) => {
+                          const total = d.rows.length
+                          const availableCount = d.rows.filter((r) => String(r?.status || '').toLowerCase() === 'yes').length
+
+                          return (
+                            <div key={d.day} className="rounded-3xl border border-gray-200 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                                  <div className="mt-0.5 text-xs text-gray-600">
+                                    Beschikbaar: <span className="font-semibold text-gray-900">{availableCount}</span>
+                                    {total ? ` / ${total}` : ''}
                                   </div>
-                                )
-                              })}
-                              {d.rows.length === 0 ? (
-                                <div className="text-sm text-gray-600">Geen users gekoppeld aan deze datum.</div>
-                              ) : null}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 grid gap-2">
+                                {d.rows.map((r) => {
+                                  const profile = profilesByUserId[String(r.user_id)]
+                                  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || String(r.user_id)
+                                  return (
+                                    <div key={String(r.user_id)} className="rounded-2xl border border-gray-200 px-3 py-2">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
+                                        <div className="text-xs font-semibold text-gray-700">{availabilityStatusLabel(r.status)}</div>
+                                      </div>
+                                      {r.comment ? <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{r.comment}</div> : null}
+                                    </div>
+                                  )
+                                })}
+                                {d.rows.length === 0 ? (
+                                  <div className="text-sm text-gray-600">Geen users gekoppeld aan deze datum.</div>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          )
+                        })
                       ) : (
                         <div className="text-sm text-gray-600">Nog geen beschikbaarheidsvraag ingesteld.</div>
                       )}

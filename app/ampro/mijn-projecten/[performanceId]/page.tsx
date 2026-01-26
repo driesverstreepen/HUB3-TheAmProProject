@@ -458,7 +458,7 @@ export default function AmproMijnProjectenDetailPage() {
                       {performanceDatesLabel ? (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
-                          <span>Voorstellingsdata: {performanceDatesLabel}</span>
+                          <span>Voorstelling periode: {performanceDatesLabel}</span>
                         </div>
                       ) : null}
                     </div>

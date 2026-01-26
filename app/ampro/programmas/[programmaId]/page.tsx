@@ -156,8 +156,8 @@ export default function AmproProgrammaDetailPage() {
 
         {loading ? <div className="mt-6 text-sm text-gray-600">Laden…</div> : null}
         {programma ? (
-          <div className="grid grid-cols-1 md:grid-cols-[1fr,360px] gap-6">
-            <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+            <div className="space-y-6 md:col-span-3">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">
@@ -176,46 +176,45 @@ export default function AmproProgrammaDetailPage() {
                   </div>
                 </div>
 
-              </div>
-
-              {infoHasAny ? (
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
-                  <div className="grid gap-3 text-sm text-gray-500">
-                    {location ? (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
-                        <div className="grid gap-1">
-                          <div>
-                            <span className="text-gray-500">Locatie:</span> {location.name}
+                {infoHasAny ? (
+                  <div className="mt-6 border-t border-gray-100 pt-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-3">Informatie</h2>
+                    <div className="grid gap-3 text-sm text-gray-500">
+                      {location ? (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
+                          <div className="grid gap-1">
+                            <div>
+                              <span className="text-gray-500">Locatie:</span> {location.name}
+                            </div>
+                            {location.address ? (
+                              <div className="text-xs text-gray-500 whitespace-pre-wrap">{location.address}</div>
+                            ) : null}
                           </div>
-                          {location.address ? (
-                            <div className="text-xs text-gray-500 whitespace-pre-wrap">{location.address}</div>
-                          ) : null}
                         </div>
-                      </div>
-                    ) : null}
-                    {rehearsalLabel ? (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span>Repetitie periode: {rehearsalLabel}</span>
-                      </div>
-                    ) : null}
-                    {performanceDatesLabel ? (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span>Voorstellingsdata: {performanceDatesLabel}</span>
-                      </div>
-                    ) : null}
-                    {programma.application_deadline ? (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span>Deadline: {formatDateOnlyFromISODate(programma.application_deadline)}</span>
-                      </div>
-                    ) : null}
+                      ) : null}
+                      {rehearsalLabel ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <span>Repetitie periode: {rehearsalLabel}</span>
+                        </div>
+                      ) : null}
+                      {performanceDatesLabel ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <span>Voorstelling periode: {performanceDatesLabel}</span>
+                        </div>
+                      ) : null}
+                      {programma.application_deadline ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <span>Deadline: {formatDateOnlyFromISODate(programma.application_deadline)}</span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               {programma.description ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
@@ -225,7 +224,7 @@ export default function AmproProgrammaDetailPage() {
               ) : null}
             </div>
 
-            <div>
+            <div className="md:col-span-1">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 sticky top-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-4">Inschrijven</h3>
 
@@ -237,9 +236,7 @@ export default function AmproProgrammaDetailPage() {
                     </span>
                   </div>
                   <div className="text-sm text-gray-500">
-                    {programma.application_deadline
-                      ? `Deadline: ${formatDateOnlyFromISODate(programma.application_deadline)}`
-                      : 'Geen deadline ingesteld'}
+                    {programma.application_deadline ? `Deadline: ${formatDateOnlyFromISODate(programma.application_deadline)}` : ''}
                   </div>
                 </div>
 

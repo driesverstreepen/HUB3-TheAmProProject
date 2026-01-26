@@ -39,12 +39,14 @@ type ProfileRow = {
   city: string | null
 }
 
+type AnswerField = Extract<AmproFormField, { type: 'text' | 'textarea' | 'date' | 'select' | 'checkbox' }>
+
 function FieldInput({
   field,
   value,
   onChange,
 }: {
-  field: AmproFormField
+  field: AnswerField
   value: any
   onChange: (value: any) => void
 }) {
@@ -89,7 +91,10 @@ function FieldInput({
           onChange={(e) => onChange(e.target.checked)}
           className="h-4 w-4 rounded border-gray-300"
         />
-        <span>{field.label}</span>
+        <span>
+          {field.label}
+          {field.required ? <span className="text-red-600"> *</span> : null}
+        </span>
       </label>
     )
   }
@@ -121,6 +126,25 @@ export default function AmproProgrammaApplyPage() {
   const [saving, setSaving] = useState(false)
   const [mustCompleteProfile, setMustCompleteProfile] = useState(false)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
+
+  const answerFields = useMemo(() => {
+    return (fields || []).filter(
+      (f) => f.type === 'text' || f.type === 'textarea' || f.type === 'date' || f.type === 'select' || f.type === 'checkbox',
+    )
+  }, [fields])
+
+  const missingRequiredLabels = useMemo(() => {
+    return answerFields
+      .filter((f) => Boolean((f as any)?.required))
+      .filter((f) => {
+        const v = (answers as any)[f.key]
+        if (f.type === 'checkbox') return !Boolean(v)
+        return !(typeof v === 'string' && v.trim().length > 0)
+      })
+      .map((f) => f.label)
+  }, [answerFields, answers])
+
+  const canSubmit = missingRequiredLabels.length === 0
 
   useEffect(() => {
     let cancelled = false
@@ -239,15 +263,6 @@ export default function AmproProgrammaApplyPage() {
         throw new Error('Je inschrijving wordt momenteel beoordeeld en kan tijdelijk niet aangepast worden')
       }
 
-      const missingRequiredLabels = fields
-        .filter((f) => Boolean((f as any)?.required))
-        .filter((f) => {
-          const v = (answers as any)[f.key]
-          if (f.type === 'checkbox') return !Boolean(v)
-          return !(typeof v === 'string' && v.trim().length > 0)
-        })
-        .map((f) => f.label)
-
       if (missingRequiredLabels.length) {
         throw new Error(`Vul alle verplichte velden in: ${missingRequiredLabels.join(', ')}`)
       }
@@ -352,6 +367,24 @@ export default function AmproProgrammaApplyPage() {
             ) : null}
 
             {fields.map((field) => {
+              if (field.type === 'title') {
+                return (
+                  <div key={field.key} className="pt-2">
+                    <div className="text-lg font-bold text-gray-900">{field.label}</div>
+                  </div>
+                )
+              }
+
+              if (field.type === 'info') {
+                const text = (field.text || '').trim()
+                return (
+                  <div key={field.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    {field.label ? <div className="text-sm font-semibold text-gray-900">{field.label}</div> : null}
+                    {text ? <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{text}</div> : null}
+                  </div>
+                )
+              }
+
               if (field.type === 'checkbox') {
                 return (
                   <div key={field.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -366,7 +399,10 @@ export default function AmproProgrammaApplyPage() {
 
               return (
                 <label key={field.key} className="grid gap-1 rounded-2xl text-sm font-medium text-gray-700">
-                  {field.label}
+                  <span>
+                    {field.label}
+                    {field.required ? <span className="text-red-600"> *</span> : null}
+                  </span>
                   <FieldInput
                     field={field}
                     value={answers[field.key]}
@@ -376,11 +412,15 @@ export default function AmproProgrammaApplyPage() {
               )
             })}
 
+            {missingRequiredLabels.length ? (
+              <div className="text-xs text-gray-500">Vul alle verplichte velden (*) in om te kunnen versturen.</div>
+            ) : null}
+
             <button
               onClick={submit}
-              disabled={saving}
+              disabled={saving || !canSubmit}
               className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
-                saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                saving || !canSubmit ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
               {saving ? 'Opslaan…' : 'Verstuur inschrijving'}

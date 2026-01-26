@@ -47,6 +47,17 @@ export type AmproFormField =
       type: 'checkbox'
       required?: boolean
     }
+  | {
+      key: string
+      label: string
+      type: 'title'
+    }
+  | {
+      key: string
+      label: string
+      type: 'info'
+      text?: string
+    }
 
 export function parseAmproFormFields(value: unknown): AmproFormField[] {
   if (!Array.isArray(value)) return []
@@ -55,6 +66,23 @@ export function parseAmproFormFields(value: unknown): AmproFormField[] {
       if (!raw || typeof raw !== 'object') return null
       if (typeof raw.key !== 'string' || typeof raw.label !== 'string' || typeof raw.type !== 'string') return null
       const type = raw.type as AmproFormField['type']
+
+      if (type === 'title') {
+        return {
+          key: raw.key,
+          label: raw.label,
+          type,
+        } as AmproFormField
+      }
+
+      if (type === 'info') {
+        return {
+          key: raw.key,
+          label: raw.label,
+          type,
+          text: typeof raw.text === 'string' ? raw.text : undefined,
+        } as AmproFormField
+      }
 
       if (type === 'select') {
         const options = Array.isArray(raw.options)
