@@ -185,7 +185,7 @@ export default function AmproProgrammaDetailPage() {
                 </div>
 
                 {infoHasAny ? (
-                  <div className="mt-6 border-t border-gray-100 pt-6">
+                  <div className="mt-6 border-t border-gray-200 dark:border-gray-100/20 pt-6">
                     <h2 className="text-lg font-bold text-gray-900 mb-3">Information</h2>
                     <div className="grid gap-3 text-sm text-gray-500">
                       {location ? (
