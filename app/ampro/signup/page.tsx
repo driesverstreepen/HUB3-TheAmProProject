@@ -34,7 +34,7 @@ export default function AmproSignupPage() {
     e.preventDefault()
     try {
       if (!agreedToTerms) {
-        showError('Je moet akkoord gaan met de Algemene voorwaarden en de Privacyverklaring')
+        showError('You must agree to the Terms of Service and the Privacy Policy')
         return
       }
       setLoading(true)
@@ -47,7 +47,7 @@ export default function AmproSignupPage() {
 
       // If email confirmations are enabled, user might need to confirm first.
       if (!data?.session) {
-        showInfo('Check je mailbox om je account te bevestigen. Daarna kan je inloggen.')
+        showInfo('Check your inbox to confirm your account. Then you can log in.')
         return
       }
 
@@ -91,7 +91,7 @@ export default function AmproSignupPage() {
 
       router.replace(next)
     } catch (e: any) {
-      showError(e?.message || 'Account aanmaken mislukt')
+      showError(e?.message || 'Account creation failed')
     } finally {
       setLoading(false)
     }
@@ -100,8 +100,8 @@ export default function AmproSignupPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-2xl font-bold text-gray-900">Account maken</h1>
-        <p className="mt-1 text-sm text-gray-600">Maak een account om toegang te krijgen tot inschrijven.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
+        <p className="mt-1 text-sm text-gray-600">Create an account to apply for programs.</p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-3">
           <label className="grid gap-1 text-sm font-medium text-gray-700">
@@ -116,7 +116,7 @@ export default function AmproSignupPage() {
           </label>
 
           <label className="grid gap-1 text-sm font-medium text-gray-700">
-            Wachtwoord
+            Password
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -131,8 +131,8 @@ export default function AmproSignupPage() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                aria-label={showPassword ? 'Verberg wachtwoord' : 'Toon wachtwoord'}
-                title={showPassword ? 'Verberg wachtwoord' : 'Toon wachtwoord'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -141,7 +141,10 @@ export default function AmproSignupPage() {
 
           <div className="flex items-start gap-3 p-4 my-4 bg-gray-50 rounded-2xl border border-gray-200">
             <input type="checkbox" id="agreeToTermsAmpro" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-1 h-4 w-4 text-blue-600" />
-            <label htmlFor="agreeToTermsAmpro" className="text-sm text-gray-700">Ik ga akkoord met de <Link href="/legal/terms" className="text-blue-600 underline">Algemene voorwaarden</Link> en de <Link href="/legal/privacy-policy" className="text-blue-600 underline">Privacyverklaring</Link></label>
+            <label htmlFor="agreeToTermsAmpro" className="text-sm text-gray-700">
+              I agree to the <Link href="/legal/terms" className="text-blue-600 underline">Terms of Service</Link> and the{' '}
+              <Link href="/legal/privacy-policy" className="text-blue-600 underline">Privacy Policy</Link>
+            </label>
           </div>
 
           <button
@@ -153,20 +156,20 @@ export default function AmproSignupPage() {
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
-            {loading ? 'Bezig…' : 'Account maken'}
+            {loading ? 'Working…' : 'Create account'}
           </button>
         </form>
 
         <div className="mt-6 text-sm text-gray-700">
-          Heb je al een account?{' '}
+          Already have an account?{' '}
           <Link href="/ampro/login" className="font-semibold text-gray-900 hover:text-blue-600">
-            Login
+            Log in
           </Link>
         </div>
 
         <div className="mt-4">
           <Link href="/ampro" className="text-sm font-semibold text-gray-900">
-            ← Terug
+            ← Back
           </Link>
         </div>
       </div>

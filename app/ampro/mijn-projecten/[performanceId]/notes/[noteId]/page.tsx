@@ -100,7 +100,7 @@ export default function AmproNoteDetailPage() {
           setNote((noteResp.data as any) || null)
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon note niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load note')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -123,10 +123,10 @@ export default function AmproNoteDetailPage() {
             className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-5 w-5" />
-            Terug
+            Back
           </button>
           <Link href="/ampro/mijn-projecten" className="text-sm text-gray-500 hover:text-gray-700">
-            Mijn projecten
+            My projects
           </Link>
         </div>
 
@@ -135,7 +135,7 @@ export default function AmproNoteDetailPage() {
 
           {!hasPaid ? (
             <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-              Deze note is pas zichtbaar na betaling.
+              This note is only visible after payment.
               {adminPaymentUrl ? (
                 <div className="mt-3">
                   <button
@@ -149,7 +149,7 @@ export default function AmproNoteDetailPage() {
                     }}
                     className="h-11 rounded-3xl px-6 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700"
                   >
-                    Betaal
+                    Pay
                   </button>
                 </div>
               ) : null}
@@ -163,7 +163,7 @@ export default function AmproNoteDetailPage() {
               <div className="text-sm text-gray-700 whitespace-pre-wrap">{note.body}</div>
             </div>
           ) : (
-            <div className="mt-4 text-sm text-gray-600">Note niet gevonden.</div>
+            <div className="mt-4 text-sm text-gray-600">Note not found.</div>
           )}
         </div>
       </ContentContainer>

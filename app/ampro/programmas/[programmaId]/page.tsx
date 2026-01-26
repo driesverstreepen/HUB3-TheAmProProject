@@ -101,7 +101,7 @@ export default function AmproProgrammaDetailPage() {
           setLocation(loc)
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon programma niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load program')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -128,8 +128,8 @@ export default function AmproProgrammaDetailPage() {
     const start = programma?.rehearsal_period_start
     const end = programma?.rehearsal_period_end
     if (start && end) return `${formatDateOnlyFromISODate(start)} – ${formatDateOnlyFromISODate(end)}`
-    if (start) return `vanaf ${formatDateOnlyFromISODate(start)}`
-    if (end) return `tot ${formatDateOnlyFromISODate(end)}`
+    if (start) return `from ${formatDateOnlyFromISODate(start)}`
+    if (end) return `until ${formatDateOnlyFromISODate(end)}`
     return null
   })()
 
@@ -138,8 +138,8 @@ export default function AmproProgrammaDetailPage() {
   const typeLabel = (() => {
     const t = (programma?.program_type || '').toString().toLowerCase()
     if (t === 'workshop') return 'Workshop'
-    if (t === 'performance') return 'Voorstelling'
-    return t ? t : 'Programma'
+    if (t === 'performance') return 'Performance'
+    return t ? t : 'Program'
   })()
 
   return (
@@ -151,10 +151,10 @@ export default function AmproProgrammaDetailPage() {
           className="mb-6 inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-5 w-5" />
-          Terug naar programma’s
+          Back to programs
         </button>
 
-        {loading ? <div className="mt-6 text-sm text-gray-600">Laden…</div> : null}
+        {loading ? <div className="mt-6 text-sm text-gray-600">Loading…</div> : null}
         {programma ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
             <div className="space-y-6 md:col-span-3">
@@ -178,14 +178,14 @@ export default function AmproProgrammaDetailPage() {
 
                 {infoHasAny ? (
                   <div className="mt-6 border-t border-gray-100 pt-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-3">Informatie</h2>
+                    <h2 className="text-lg font-bold text-gray-900 mb-3">Information</h2>
                     <div className="grid gap-3 text-sm text-gray-500">
                       {location ? (
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
                           <div className="grid gap-1">
                             <div>
-                              <span className="text-gray-500">Locatie:</span> {location.name}
+                              <span className="text-gray-500">Location:</span> {location.name}
                             </div>
                             {location.address ? (
                               <div className="text-xs text-gray-500 whitespace-pre-wrap">{location.address}</div>
@@ -196,13 +196,13 @@ export default function AmproProgrammaDetailPage() {
                       {rehearsalLabel ? (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-500" />
-                          <span>Repetitie periode: {rehearsalLabel}</span>
+                          <span>Rehearsal period: {rehearsalLabel}</span>
                         </div>
                       ) : null}
                       {performanceDatesLabel ? (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-500" />
-                          <span>Voorstelling periode: {performanceDatesLabel}</span>
+                          <span>Performance dates: {performanceDatesLabel}</span>
                         </div>
                       ) : null}
                       {programma.application_deadline ? (
@@ -218,7 +218,7 @@ export default function AmproProgrammaDetailPage() {
 
               {programma.description ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Beschrijving</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
                   <p className="text-gray-500 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
                 </div>
               ) : null}
@@ -226,7 +226,7 @@ export default function AmproProgrammaDetailPage() {
 
             <div className="md:col-span-1">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 sticky top-6">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Inschrijven</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Apply</h3>
 
                 <div className="mb-4 p-4 bg-blue-50 border border-gray-200 rounded-3xl">
                   <div className="flex items-center justify-between mb-1">
@@ -246,7 +246,7 @@ export default function AmproProgrammaDetailPage() {
                   onClick={() => router.push(applyHref)}
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 mt-6 bg-blue-600 hover:bg-blue-700 text-gray-50 rounded-3xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Inschrijven
+                  Apply
                 </button>
               </div>
             </div>

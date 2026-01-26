@@ -16,7 +16,7 @@ type Preferences = {
 }
 
 const CHANNEL_OPTIONS: Array<{ value: Channel; label: string }> = [
-  { value: 'none', label: 'Uit' },
+  { value: 'none', label: 'Off' },
   { value: 'in_app', label: 'In-app' },
   { value: 'push', label: 'Push' },
 ]
@@ -41,7 +41,7 @@ export default function AmproNotificationSettingsPage() {
         setLoading(true)
         const res = await fetch('/api/notification-preferences', { method: 'GET', credentials: 'include' })
         const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json?.error || 'Kon voorkeuren niet laden')
+        if (!res.ok) throw new Error(json?.error || 'Failed to load preferences')
 
         if (!cancelled) {
           setWarning(json?.warning ? String(json.warning) : null)
@@ -58,7 +58,7 @@ export default function AmproNotificationSettingsPage() {
           }))
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon voorkeuren niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load preferences')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -79,14 +79,14 @@ export default function AmproNotificationSettingsPage() {
         body: JSON.stringify(prefs),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'Opslaan mislukt')
+      if (!res.ok) throw new Error(json?.error || 'Save failed')
 
       if (json?.warning) {
         setWarning(String(json.warning))
       }
-      showSuccess('Notificatie-instellingen opgeslagen')
+      showSuccess('Notification settings saved')
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -100,8 +100,8 @@ export default function AmproNotificationSettingsPage() {
     <div className="min-h-screen bg-gray-50">
       <ContentContainer className="py-8">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8">
-          <h1 className="text-2xl font-bold text-gray-900">Notificatie-instellingen</h1>
-          <p className="mt-1 text-sm text-gray-500">Kies per type of je meldingen in-app of als push wilt krijgen.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Notification settings</h1>
+          <p className="mt-1 text-sm text-gray-500">Choose per type whether you want in-app or push notifications.</p>
 
           {warning ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -112,8 +112,8 @@ export default function AmproNotificationSettingsPage() {
           <div className="mt-6">
             <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 p-4">
               <div>
-                <div className="text-sm font-semibold text-gray-900">Alles uitschakelen</div>
-                <div className="text-sm text-gray-500">Zet alle AMPRO notificaties uit.</div>
+                <div className="text-sm font-semibold text-gray-900">Disable all</div>
+                <div className="text-sm text-gray-500">Turn off all AMPRO notifications.</div>
               </div>
               <label className="inline-flex items-center gap-2">
                 <input
@@ -122,7 +122,7 @@ export default function AmproNotificationSettingsPage() {
                   onChange={(e) => setPrefs((p) => ({ ...p, disable_all: e.target.checked }))}
                   className="h-4 w-4"
                 />
-                <span className="text-sm text-gray-700">Uit</span>
+                <span className="text-sm text-gray-700">Off</span>
               </label>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function AmproNotificationSettingsPage() {
             </div>
 
             <div className="rounded-2xl border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-900">Correcties</div>
+              <div className="text-sm font-semibold text-gray-900">Corrections</div>
               <div className="mt-2">
                 <Select
                   value={prefs.ampro_corrections_channel}
@@ -163,7 +163,7 @@ export default function AmproNotificationSettingsPage() {
             </div>
 
             <div className="rounded-2xl border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-900">Beschikbaarheden</div>
+              <div className="text-sm font-semibold text-gray-900">Availability</div>
               <div className="mt-2">
                 <Select
                   value={prefs.ampro_availability_channel}
@@ -181,8 +181,8 @@ export default function AmproNotificationSettingsPage() {
           </div>
 
           <div className="mt-6 rounded-2xl border border-gray-200 p-4">
-            <div className="text-sm font-semibold text-gray-900">Push op dit toestel</div>
-            <div className="mt-1 text-sm text-gray-500">Zet pushmeldingen aan/uit voor deze browser.</div>
+            <div className="text-sm font-semibold text-gray-900">Push on this device</div>
+            <div className="mt-1 text-sm text-gray-500">Toggle push notifications for this browser.</div>
             <div className="mt-3">
               <PushNotificationsToggle variant="button" />
             </div>
@@ -194,7 +194,7 @@ export default function AmproNotificationSettingsPage() {
               disabled={saving}
               className="inline-flex h-11 items-center justify-center rounded-3xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {saving ? 'Opslaan…' : 'Opslaan'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>

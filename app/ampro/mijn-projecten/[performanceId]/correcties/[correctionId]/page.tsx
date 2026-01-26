@@ -102,7 +102,7 @@ export default function AmproCorrectieDetailPage() {
           setCorrection((corrResp.data as any) || null)
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon correctie niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load correction')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -125,19 +125,19 @@ export default function AmproCorrectieDetailPage() {
             className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-5 w-5" />
-            Terug
+            Back
           </button>
           <Link href="/ampro/mijn-projecten" className="text-sm text-gray-500 hover:text-gray-700">
-            Mijn projecten
+            My projects
           </Link>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h1 className="text-xl font-bold text-gray-900">{correction?.title ? String(correction.title) : 'Correctie'}</h1>
+          <h1 className="text-xl font-bold text-gray-900">{correction?.title ? String(correction.title) : 'Correction'}</h1>
 
           {!hasPaid ? (
             <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-              Correcties worden pas zichtbaar na betaling.
+              Corrections are only visible after payment.
               {adminPaymentUrl ? (
                 <div className="mt-3">
                   <button
@@ -151,7 +151,7 @@ export default function AmproCorrectieDetailPage() {
                     }}
                     className="h-11 rounded-3xl px-6 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700"
                   >
-                    Betaal
+                    Pay
                   </button>
                 </div>
               ) : null}
@@ -159,13 +159,13 @@ export default function AmproCorrectieDetailPage() {
           ) : correction ? (
             <div className="mt-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-base font-semibold text-gray-900">{String(correction.title || 'Correctie')}</div>
+                <div className="text-base font-semibold text-gray-900">{String(correction.title || 'Correction')}</div>
                 <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(correction.correction_date))}</div>
               </div>
               <div className="text-sm text-gray-700 whitespace-pre-wrap">{correction.body}</div>
             </div>
           ) : (
-            <div className="mt-4 text-sm text-gray-600">Correctie niet gevonden.</div>
+            <div className="mt-4 text-sm text-gray-600">Correction not found.</div>
           )}
         </div>
       </ContentContainer>

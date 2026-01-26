@@ -34,7 +34,7 @@ export default function SearchFilterBar({
   const [collapsedMobile, setCollapsedMobile] = React.useState(defaultCollapsedMobile)
 
   return (
-    <div className="bg-white no-shadow rounded-xl border border-slate-200 p-4 mb-6">
+    <div className="bg-white no-shadow rounded-2xl border border-slate-200 p-4 mb-6">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <div className="relative flex-1 min-w-0">
@@ -43,7 +43,7 @@ export default function SearchFilterBar({
               value={value}
               onChange={(e) => onChange?.(e.target.value)}
               placeholder={placeholder}
-              className="w-full pl-10 pr-10 h-10 text-sm border border-slate-200 dark:border-slate-700/60 rounded-lg bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400"
+              className="w-full pl-10 pr-10 h-10 text-sm border border-slate-200 dark:border-slate-700/60 rounded-3xl bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400"
             />
             {value && (
               <button

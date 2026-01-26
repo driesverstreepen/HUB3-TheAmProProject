@@ -40,7 +40,7 @@ export default function AmproLoginPage() {
 
       router.replace(next)
     } catch (e: any) {
-      showError(e?.message || 'Inloggen mislukt')
+      showError(e?.message || 'Login failed')
     } finally {
       setLoading(false)
     }
@@ -49,8 +49,8 @@ export default function AmproLoginPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-2xl font-bold text-gray-900">Login</h1>
-        <p className="mt-1 text-sm text-gray-600">Log in om toegang te krijgen tot inschrijven.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Log in</h1>
+        <p className="mt-1 text-sm text-gray-600">Log in to access applications.</p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-3">
           <label className="grid gap-1 text-sm font-medium text-gray-700">
@@ -66,7 +66,7 @@ export default function AmproLoginPage() {
           </label>
 
           <label className="grid gap-1 text-sm font-medium text-gray-700">
-            Wachtwoord
+            Password
             <input
               type="password"
               value={password}
@@ -84,20 +84,20 @@ export default function AmproLoginPage() {
                 loading ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
-            {loading ? 'Inloggen…' : 'Inloggen'}
+            {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
 
         <div className="mt-6 text-sm text-gray-700">
-          Nog geen account?{' '}
+          Don’t have an account?{' '}
           <Link href="/ampro/signup" className="font-semibold text-gray-900 hover:text-blue-600">
-            Account maken
+            Create account
           </Link>
         </div>
 
         <div className="mt-4">
           <Link href="/ampro" className="text-sm font-semibold text-gray-900">
-            ← Terug
+            ← Back
           </Link>
         </div>
       </div>

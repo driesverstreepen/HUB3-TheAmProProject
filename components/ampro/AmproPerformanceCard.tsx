@@ -9,6 +9,7 @@ export type AmproPerformanceCardModel = {
   id: string
   title: string
   description: string | null
+  is_public?: boolean | null
   applications_open: boolean
   application_deadline: string | null
   rehearsal_period_start?: string | null
@@ -25,6 +26,8 @@ export default function AmproPerformanceCard({
   applyHref: string
 }) {
   const router = useRouter()
+
+  if (performance.is_public === false) return null
 
   const deadlinePassed = isISODatePast(performance.application_deadline)
   const isClosed = !performance.applications_open || deadlinePassed
@@ -53,9 +56,9 @@ export default function AmproPerformanceCard({
         className="w-full bg-white rounded-3xl p-4 flex flex-col relative overflow-visible elev-1 h-full min-h-[180px] group hover:bg-gray-50 border-l-4 border-blue-600"
       >
 
-        {deadlinePassed ? (
+        {isClosed ? (
           <div className="absolute inset-0 rounded-3xl bg-gray-200/60 flex items-center justify-center pointer-events-none">
-            <div className="text-xl font-bold text-gray-700">Applications closed</div>
+            <div className="text-xl font-bold text-gray-700">applications closed</div>
           </div>
         ) : null}
 

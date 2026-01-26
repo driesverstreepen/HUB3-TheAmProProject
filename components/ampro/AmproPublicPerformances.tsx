@@ -67,7 +67,7 @@ export default function AmproPublicPerformances({
 
         const { data, error } = await supabase
           .from('ampro_programmas')
-          .select('id,title,description,applications_open,application_deadline,rehearsal_period_start,rehearsal_period_end,performance_dates,region')
+          .select('id,title,description,is_public,applications_open,application_deadline,rehearsal_period_start,rehearsal_period_end,performance_dates,region')
           .order('created_at', { ascending: false })
 
         if (error) throw error

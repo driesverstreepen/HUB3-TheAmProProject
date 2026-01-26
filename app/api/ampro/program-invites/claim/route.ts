@@ -92,10 +92,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status })
     }
 
+    // If profile is incomplete (common for users who just created an account from an invite link),
+    // guide them to complete it before continuing.
+    let redirect = '/ampro/mijn-projecten'
+    try {
+      const prof = await admin
+        .from('ampro_dancer_profiles')
+        .select('first_name,last_name,birth_date,street,house_number,postal_code,city')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      const v: any = (prof as any)?.data || {}
+      const nonEmpty = (s: any) => typeof s === 'string' && s.trim().length > 0
+      const complete =
+        nonEmpty(v.first_name) &&
+        nonEmpty(v.last_name) &&
+        nonEmpty(v.birth_date) &&
+        nonEmpty(v.street) &&
+        nonEmpty(v.house_number) &&
+        nonEmpty(v.postal_code) &&
+        nonEmpty(v.city)
+
+      if (!complete) {
+        redirect = `/ampro/profile?next=${encodeURIComponent('/ampro/mijn-projecten')}`
+      }
+    } catch {
+      // best-effort
+    }
+
     return NextResponse.json({
       success: true,
       performance_id: performanceId,
-      redirect: '/ampro/mijn-projecten',
+      redirect,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 })

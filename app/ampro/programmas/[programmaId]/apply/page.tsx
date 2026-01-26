@@ -72,7 +72,7 @@ function FieldInput({
         className={common}
         required={Boolean(field.required)}
       >
-        <option value="">Selecteer…</option>
+        <option value="">Select…</option>
         {field.options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -162,7 +162,7 @@ export default function AmproProgrammaApplyPage() {
         // Require profile completeness before allowing inschrijving.
         const profileResp = await supabase
           .from('ampro_dancer_profiles')
-          .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city')
+          .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city,instagram_username,tshirt_size')
           .eq('user_id', user.id)
           .maybeSingle()
 
@@ -224,7 +224,7 @@ export default function AmproProgrammaApplyPage() {
           setAnswers((appResp.data as any)?.answers_json || {})
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon inschrijfformulier niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load application form')
       } finally {
         if (!cancelled) setChecking(false)
       }
@@ -241,35 +241,35 @@ export default function AmproProgrammaApplyPage() {
 
       const { data: sessionData } = await supabase.auth.getSession()
       const user = sessionData?.session?.user
-      if (!user) throw new Error('Je bent niet ingelogd')
+      if (!user) throw new Error('You are not logged in')
 
       if (mustCompleteProfile) {
-        throw new Error('Vul eerst je profiel volledig in om in te schrijven')
+        throw new Error('Please complete your profile before applying')
       }
 
       if (!programma?.applications_open) {
-        throw new Error('Inschrijvingen zijn gesloten voor dit programma')
+        throw new Error('Applications are closed for this program')
       }
 
       if (isISODatePast(programma?.application_deadline)) {
-        throw new Error('Inschrijvingen zijn gesloten voor dit programma')
+        throw new Error('Applications are closed for this program')
       }
 
       if (existing && existing.status !== 'pending') {
         const s = String(existing.status || '').toLowerCase()
         if (s === 'accepted' || s === 'rejected') {
-          throw new Error('Je inschrijving is al beoordeeld en kan niet meer aangepast worden')
+          throw new Error('Your application has already been reviewed and can no longer be edited')
         }
-        throw new Error('Je inschrijving wordt momenteel beoordeeld en kan tijdelijk niet aangepast worden')
+        throw new Error('Your application is currently under review and cannot be edited right now')
       }
 
       if (missingRequiredLabels.length) {
-        throw new Error(`Vul alle verplichte velden in: ${missingRequiredLabels.join(', ')}`)
+        throw new Error(`Please fill in all required fields: ${missingRequiredLabels.join(', ')}`)
       }
 
       const latestProfileResp = await supabase
         .from('ampro_dancer_profiles')
-        .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city')
+        .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city,instagram_username,tshirt_size')
         .eq('user_id', user.id)
         .maybeSingle()
 
@@ -287,6 +287,8 @@ export default function AmproProgrammaApplyPage() {
         house_number_addition: p?.house_number_addition ?? null,
         postal_code: p?.postal_code ?? null,
         city: p?.city ?? null,
+        instagram_username: p?.instagram_username ?? null,
+        tshirt_size: p?.tshirt_size ?? null,
       }
 
       if (existing?.id) {
@@ -305,11 +307,11 @@ export default function AmproProgrammaApplyPage() {
         if (error) throw error
       }
 
-      showSuccess('Inschrijving opgeslagen')
+      showSuccess('Application saved')
 
       router.replace('/ampro/user')
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -323,12 +325,12 @@ export default function AmproProgrammaApplyPage() {
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-2xl px-6 py-12">
           <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
-            ← Terug
+            ← Back
           </Link>
 
-          <h1 className="mt-6 text-2xl font-bold text-gray-900">Profiel onvolledig</h1>
+          <h1 className="mt-6 text-2xl font-bold text-gray-900">Incomplete profile</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Voor je kan inschrijven, moeten je voornaam, achternaam, geboortedatum en adresgegevens ingevuld zijn.
+            Before you can apply, your first name, last name, date of birth, and address must be filled in.
           </p>
 
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
@@ -337,7 +339,7 @@ export default function AmproProgrammaApplyPage() {
               onClick={() => router.push(`/ampro/profile?next=${encodeURIComponent(nextPath)}`)}
               className="h-11 rounded-3xl px-4 text-sm font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
             >
-              Ga naar mijn profiel
+              Go to my profile
             </button>
           </div>
         </div>
@@ -350,20 +352,20 @@ export default function AmproProgrammaApplyPage() {
       <div className="mx-auto max-w-2xl px-6 py-12">
         <div className="flex items-center justify-between gap-4">
           <Link href={`/ampro/programmas/${encodeURIComponent(programmaId)}`} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
-            ← Terug
+            ← Back
           </Link>
         </div>
 
-        <h1 className="mt-6 text-2xl font-bold text-gray-900">Inschrijven</h1>
-        {programma ? <p className="mt-1 text-md text-gray-700">Voor: {programma.title}</p> : null}
+        <h1 className="mt-6 text-2xl font-bold text-gray-900">Apply</h1>
+        {programma ? <p className="mt-1 text-md text-gray-700">For: {programma.title}</p> : null}
 
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-          <div className="text-sm font-semibold text-gray-900">Formulier</div>
-          <div className="mt-1 text-sm text-gray-600">{form?.name || 'Standaard inschrijving'}</div>
+          <div className="text-sm font-semibold text-gray-900">Form</div>
+          <div className="mt-1 text-sm text-gray-600">{form?.name || 'Standard application'}</div>
 
           <div className="mt-6 grid gap-4">
             {fields.length === 0 ? (
-              <div className="text-sm text-gray-700">Nog geen form fields ingesteld.</div>
+              <div className="text-sm text-gray-700">No form fields configured yet.</div>
             ) : null}
 
             {fields.map((field) => {
@@ -413,7 +415,7 @@ export default function AmproProgrammaApplyPage() {
             })}
 
             {missingRequiredLabels.length ? (
-              <div className="text-xs text-gray-500">Vul alle verplichte velden (*) in om te kunnen versturen.</div>
+              <div className="text-xs text-gray-500">Fill in all required fields (*) to submit.</div>
             ) : null}
 
             <button
@@ -423,7 +425,7 @@ export default function AmproProgrammaApplyPage() {
                 saving || !canSubmit ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
-              {saving ? 'Opslaan…' : 'Verstuur inschrijving'}
+              {saving ? 'Submitting…' : 'Submit application'}
             </button>
           </div>
         </div>

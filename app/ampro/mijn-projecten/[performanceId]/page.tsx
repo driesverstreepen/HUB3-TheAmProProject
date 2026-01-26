@@ -71,9 +71,9 @@ type AvailabilityResponseRow = {
 }
 
 function formatYesNoMaybe(status: 'yes' | 'no' | 'maybe'): string {
-  if (status === 'yes') return 'Beschikbaar'
-  if (status === 'no') return 'Niet beschikbaar'
-  return 'Misschien'
+  if (status === 'yes') return 'Available'
+  if (status === 'no') return 'Not available'
+  return 'Maybe'
 }
 
 export default function AmproMijnProjectenDetailPage() {
@@ -273,7 +273,7 @@ export default function AmproMijnProjectenDetailPage() {
           setHasAnyAvailabilityResponseState(anyResponse)
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon programma niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load program')
       } finally {
         if (!cancelled) setChecking(false)
       }
@@ -287,8 +287,8 @@ export default function AmproMijnProjectenDetailPage() {
   const typeLabel = (() => {
     const t = (programma?.program_type || '').toString().toLowerCase()
     if (t === 'workshop') return 'Workshop'
-    if (t === 'performance') return 'Voorstelling'
-    return t ? t : 'Programma'
+    if (t === 'performance') return 'Performance'
+    return t ? t : 'Program'
   })()
 
   const performanceDatesLabel = (() => {
@@ -301,8 +301,8 @@ export default function AmproMijnProjectenDetailPage() {
     const start = programma?.rehearsal_period_start
     const end = programma?.rehearsal_period_end
     if (start && end) return `${formatDateOnlyFromISODate(start)} – ${formatDateOnlyFromISODate(end)}`
-    if (start) return `vanaf ${formatDateOnlyFromISODate(start)}`
-    if (end) return `tot ${formatDateOnlyFromISODate(end)}`
+    if (start) return `from ${formatDateOnlyFromISODate(start)}`
+    if (end) return `until ${formatDateOnlyFromISODate(end)}`
     return null
   })()
 
@@ -337,10 +337,10 @@ export default function AmproMijnProjectenDetailPage() {
       if (!programma?.id) return
       setCreatingCheckout(true)
 
-      if (!adminPaymentUrl) throw new Error('Geen betaallink beschikbaar voor dit programma')
+      if (!adminPaymentUrl) throw new Error('No payment link available for this program')
       window.location.href = String(adminPaymentUrl)
     } catch (err: any) {
-      showError(err?.message || 'Betalen mislukt')
+      showError(err?.message || 'Payment failed')
     } finally {
       setCreatingCheckout(false)
     }
@@ -366,7 +366,7 @@ export default function AmproMijnProjectenDetailPage() {
       if (!availabilityRequest?.id) return
       if (!availabilityDates.length) return
       if (!canEditAvailability) {
-        throw new Error('Beschikbaarheid is vergrendeld of kan niet meer aangepast worden')
+        throw new Error('Availability is locked or can no longer be edited')
       }
 
       setSavingAvailability(true)
@@ -374,7 +374,7 @@ export default function AmproMijnProjectenDetailPage() {
       const { data: sessionData } = await supabase.auth.getSession()
       const user = sessionData?.session?.user
       const token = String((sessionData as any)?.session?.access_token || '')
-      if (!user || !token) throw new Error('Je bent niet ingelogd')
+      if (!user || !token) throw new Error('You are not logged in')
 
       const rows = availabilityDates.map((d) => {
         const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
@@ -396,13 +396,13 @@ export default function AmproMijnProjectenDetailPage() {
       })
 
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(String((json as any)?.error || 'Opslaan mislukt'))
-      showSuccess('Beschikbaarheid opgeslagen')
+      if (!res.ok) throw new Error(String((json as any)?.error || 'Save failed'))
+      showSuccess('Availability saved')
       // Immediately reflect that the user has submitted availability so the
       // notification updates without a page refresh.
       setHasAnyAvailabilityResponseState(true)
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setSavingAvailability(false)
     }
@@ -415,9 +415,9 @@ export default function AmproMijnProjectenDetailPage() {
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-3xl px-6 py-12">
           <Link href="/ampro/mijn-projecten" className="text-sm font-semibold text-gray-900">
-            ← Terug
+            ← Back
           </Link>
-          <div className="mt-6 text-sm text-gray-600">Programma niet gevonden.</div>
+          <div className="mt-6 text-sm text-gray-600">Program not found.</div>
         </div>
       </main>
     )
@@ -432,7 +432,7 @@ export default function AmproMijnProjectenDetailPage() {
           className="mb-6 inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-5 w-5" />
-          Terug naar mijn projecten
+          Back to my projects
         </button>
 
         <div className="space-y-6">
@@ -454,14 +454,14 @@ export default function AmproMijnProjectenDetailPage() {
 
                 {infoHasAny ? (
                   <div className="mt-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Informatie</h2>
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Information</h2>
                     <div className="grid gap-3 text-sm text-gray-700">
                       {location ? (
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
                           <div className="grid gap-1">
                             <div>
-                              <span className="text-gray-900">Locatie:</span> {location.name}
+                              <span className="text-gray-900">Location:</span> {location.name}
                             </div>
                             {location.address ? (
                               <div className="text-xs text-gray-600 whitespace-pre-wrap">{location.address}</div>
@@ -473,14 +473,14 @@ export default function AmproMijnProjectenDetailPage() {
                       {rehearsalLabel ? (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
-                          <span>Repetitie periode: {rehearsalLabel}</span>
+                          <span>Rehearsal period: {rehearsalLabel}</span>
                         </div>
                       ) : null}
 
                       {performanceDatesLabel ? (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
-                          <span>Voorstelling periode: {performanceDatesLabel}</span>
+                          <span>Performance dates: {performanceDatesLabel}</span>
                         </div>
                       ) : null}
                     </div>
@@ -490,25 +490,27 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
             <div className="lg:col-span-1 h-full">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full flex flex-col justify-between">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Betaling</h2>
-                <div className="text-sm text-gray-700 mb-4">Je inschrijving wordt pas geldig na betaling. Het kan enkele dagen duren om je betaling te registreren.</div>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Payment</h2>
+                <div className="text-sm text-gray-700 mb-4">
+                  Your registration is only valid after payment. It may take a few days for your payment to be processed.
+                </div>
                 {paymentPending ? (
                   <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm mb-4">
-                    Betaling in behandeling — we verwerken je betaling handmatig.
+                    Payment pending. We process your payment manually.
                   </div>
                 ) : null}
 
                 {hasPaid ? (
                   <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm mb-4">
-                    Betaald{paymentReceivedAt ? ` op ${formatDateOnlyFromISODate(paymentReceivedAt)}` : ''}.
+                    Paid{paymentReceivedAt ? ` on ${formatDateOnlyFromISODate(paymentReceivedAt)}` : ''}.
                   </div>
                 ) : null}
 
                 <div className="flex items-center gap-3">
-                  <div className="text-sm font-semibold">{priceLabel || 'Prijs niet ingesteld'}</div>
+                  <div className="text-sm font-semibold">{priceLabel || 'Price not set'}</div>
                   {hasPaid ? (
                     <button type="button" disabled className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-green-50 border border-green-200 text-green-800">
-                      Betaald
+                      Paid
                     </button>
                   ) : adminPaymentUrl ? (
                     <button
@@ -525,7 +527,7 @@ export default function AmproMijnProjectenDetailPage() {
                         creatingCheckout ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
                     >
-                      Betaal
+                      Pay
                     </button>
                   ) : (
                     <button
@@ -533,7 +535,7 @@ export default function AmproMijnProjectenDetailPage() {
                       disabled
                       className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-gray-100 text-gray-400"
                     >
-                      Geen betaal-URL
+                      No payment URL
                     </button>
                   )}
                 </div>
@@ -560,17 +562,17 @@ export default function AmproMijnProjectenDetailPage() {
                       </div>
                     </button>
                   ))}
-                  {notes.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
+                  {notes.length === 0 ? <div className="text-sm text-gray-600">No notes yet.</div> : null}
                 </div>
               ) : (
                 <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-                  Deze sectie is pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om Notes te bekijken.
+                  This section is only visible after payment. Complete your payment via the Pay button to view notes.
                 </div>
               )}
             </div>
 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Correcties</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Corrections</h2>
               {hasPaid ? (
                 <div className="grid gap-3">
                   {corrections.map((c) => (
@@ -579,19 +581,19 @@ export default function AmproMijnProjectenDetailPage() {
                       type="button"
                       onClick={() => openCorrection(c)}
                       className="rounded-3xl border border-gray-200 p-4 text-left hover:bg-gray-50 transition-colors"
-                      aria-label={`Open correctie van ${formatDateOnlyFromISODate(String(c.correction_date))}`}
+                      aria-label={`Open correction from ${formatDateOnlyFromISODate(String(c.correction_date))}`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                        <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correction')}</div>
                         <div className="shrink-0 text-xs text-gray-500">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
                       </div>
                     </button>
                   ))}
-                  {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
+                  {corrections.length === 0 ? <div className="text-sm text-gray-600">No corrections yet.</div> : null}
                 </div>
               ) : (
                 <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-                  Correcties worden pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om deze sectie te bekijken.
+                  Corrections are only visible after payment. Complete your payment via the Pay button to view this section.
                 </div>
               )}
             </div>
@@ -623,13 +625,13 @@ export default function AmproMijnProjectenDetailPage() {
               setCorrectionModalOpen(false)
               setActiveCorrection(null)
             }}
-            ariaLabel="Correctie"
+            ariaLabel="Correction"
             contentClassName="bg-white rounded-2xl shadow-xl max-w-2xl w-full"
           >
             {activeCorrection ? (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-gray-900">{String(activeCorrection.title || 'Correctie')}</h3>
+                  <h3 className="text-lg font-bold text-gray-900">{String(activeCorrection.title || 'Correction')}</h3>
                   <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(activeCorrection.correction_date))}</div>
                 </div>
                 <div className="text-sm text-gray-700 whitespace-pre-wrap">{activeCorrection.body}</div>
@@ -640,13 +642,13 @@ export default function AmproMijnProjectenDetailPage() {
           {hasPaid ? (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Beschikbaarheid</h2>
+                <h2 className="text-xl font-bold text-gray-900">Availability</h2>
                 <button
                   type="button"
                   aria-expanded={availabilityOpen}
                   onClick={() => setAvailabilityOpen((s) => !s)}
                   className="-mr-2 inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-700 focus:outline-none"
-                  title={availabilityOpen ? 'Verberg beschikbaarheid' : 'Toon beschikbaarheid'}
+                  title={availabilityOpen ? 'Hide availability' : 'Show availability'}
                 >
                   <ChevronDown className={`h-5 w-5 transform transition-transform ${availabilityOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -655,11 +657,11 @@ export default function AmproMijnProjectenDetailPage() {
                 <div className="mb-4">
                   {hasAnyAvailabilityResponse ? (
                     <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
-                      Je hebt je beschikbaarheid doorgegeven.
+                      You have submitted your availability.
                     </div>
                   ) : (
                     <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm">
-                      Je hebt je beschikbaarheid nog niet doorgegeven.
+                      You have not submitted your availability yet.
                     </div>
                   )}
                 </div>
@@ -668,16 +670,16 @@ export default function AmproMijnProjectenDetailPage() {
               {availabilityOpen ? (
                 <>
                   {!availabilityRequest?.id ? (
-                    <div className="text-sm text-gray-600">Er is momenteel geen beschikbaarheidsvraag.</div>
+                    <div className="text-sm text-gray-600">There is currently no availability request.</div>
                   ) : !availabilityShouldShowRequest ? (
                     <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                      Er wordt momenteel geen beschikbaarheid gevraagd.
+                      Availability is not being requested at the moment.
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {!canEditAvailability ? (
                         <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                          Beschikbaarheid is vergrendeld. Je kan je antwoorden nog bekijken maar niet meer aanpassen.
+                          Availability is locked. You can still view your answers but you can no longer edit them.
                         </div>
                       ) : null}
                       {availabilityDates.map((d) => {
@@ -711,14 +713,14 @@ export default function AmproMijnProjectenDetailPage() {
                                   disabled={!canEditAvailability}
                                   className="h-11 rounded-3xl border border-gray-200 bg-white px-3 text-sm"
                                 >
-                                  <option value="yes">Beschikbaar</option>
-                                  <option value="no">Niet beschikbaar</option>
-                                  <option value="maybe">Misschien</option>
+                                  <option value="yes">Available</option>
+                                  <option value="no">Not available</option>
+                                  <option value="maybe">Maybe</option>
                                 </Select>
                               </label>
 
                               <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                Comment (optioneel)
+                                Comment (optional)
                                 <textarea
                                   value={v.comment}
                                   onChange={(e) =>
@@ -728,12 +730,12 @@ export default function AmproMijnProjectenDetailPage() {
                                     }))
                                   }
                                   disabled={!canEditAvailability}
-                                  placeholder="Bv. 30 min later op deze datum…"
+                                  placeholder="e.g. 30 min later on this date…"
                                   className="min-h-20 rounded-3xl border border-gray-200 bg-white px-3 py-2 text-sm"
                                 />
                               </label>
 
-                              <div className="text-xs text-gray-600">Huidig: {formatYesNoMaybe(v.status)}</div>
+                              <div className="text-xs text-gray-600">Current: {formatYesNoMaybe(v.status)}</div>
                             </div>
                           </div>
                         )
@@ -749,7 +751,7 @@ export default function AmproMijnProjectenDetailPage() {
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
-                        {savingAvailability ? 'Opslaan…' : 'Opslaan'}
+                        {savingAvailability ? 'Saving…' : 'Save'}
                       </button>
                     </div>
                   )}
@@ -758,9 +760,9 @@ export default function AmproMijnProjectenDetailPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Beschikbaarheid</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Availability</h2>
               <div className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-                Beschikbaarheid wordt pas zichtbaar na betaling. Voltooi je betaling via de betaalknop om deze sectie te gebruiken.
+                Availability is only visible after payment. Complete your payment via the Pay button to use this section.
               </div>
             </div>
           )}

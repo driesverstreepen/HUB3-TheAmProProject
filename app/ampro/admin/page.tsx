@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2, GripVertical } from 'lucide-react'
+import { BookOpen, MessageSquare, ClipboardList, Users, Plus, MapPin, Edit2, Eye, FileText, Trash2, Calendar, ChevronDown, ChevronUp, Link2, GripVertical, Menu, LogOut } from 'lucide-react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -15,6 +15,7 @@ import SearchFilterBar from '@/components/SearchFilterBar'
 import Select from '@/components/Select'
 import Modal from '@/components/Modal'
 import ActionIcon from '@/components/ActionIcon'
+import { MobileSidebar, type MobileSidebarSection } from '@/components/ui/MobileSidebar'
 
 type AdminSection = 'programmas' | 'forms' | 'notes' | 'corrections' | 'applications' | 'members' | 'locations' | 'availability'
 
@@ -25,24 +26,24 @@ function parseFlexibleDateToISODate(input: string): string | null {
   // Accept yyyy-mm-dd too (handy for copy/paste).
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const d = new Date(`${v}T00:00:00Z`)
-    if (!Number.isFinite(d.getTime())) throw new Error(`Ongeldige datum: ${v}`)
+    if (!Number.isFinite(d.getTime())) throw new Error(`Invalid date: ${v}`)
     return v
   }
 
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v)
-  if (!m) throw new Error(`Gebruik dd/mm/jjjj (bv. 31/12/2025). Ontvangen: ${v}`)
+  if (!m) throw new Error(`Use dd/mm/yyyy (e.g. 31/12/2025). Received: ${v}`)
 
   const dd = Number(m[1])
   const mm = Number(m[2])
   const yyyy = Number(m[3])
-  if (!dd || !mm || !yyyy) throw new Error(`Ongeldige datum: ${v}`)
-  if (mm < 1 || mm > 12) throw new Error(`Ongeldige maand in datum: ${v}`)
-  if (dd < 1 || dd > 31) throw new Error(`Ongeldige dag in datum: ${v}`)
+  if (!dd || !mm || !yyyy) throw new Error(`Invalid date: ${v}`)
+  if (mm < 1 || mm > 12) throw new Error(`Invalid month in date: ${v}`)
+  if (dd < 1 || dd > 31) throw new Error(`Invalid day in date: ${v}`)
 
   const iso = `${String(yyyy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
   const date = new Date(`${iso}T00:00:00Z`)
   if (date.getUTCFullYear() !== yyyy || date.getUTCMonth() + 1 !== mm || date.getUTCDate() !== dd) {
-    throw new Error(`Ongeldige datum: ${v}`)
+    throw new Error(`Invalid date: ${v}`)
   }
 
   return iso
@@ -117,10 +118,10 @@ function uniqueKey(base: string, used: Set<string>, fallbackBase = 'field') {
 
 function availabilityStatusLabel(status: string | null | undefined) {
   const s = String(status || '').toLowerCase()
-  if (s === 'yes') return 'Beschikbaar'
-  if (s === 'no') return 'Niet beschikbaar'
-  if (s === 'maybe') return 'Misschien'
-  return 'Geen antwoord'
+  if (s === 'yes') return 'Available'
+  if (s === 'no') return 'Not available'
+  if (s === 'maybe') return 'Maybe'
+  return 'No response'
 }
 
 function SortableCardItem({ id, children }: { id: string; children: React.ReactNode }) {
@@ -138,8 +139,8 @@ function SortableCardItem({ id, children }: { id: string; children: React.ReactN
           {...attributes}
           {...listeners}
           className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
-          title="Versleep om volgorde te bepalen"
-          aria-label="Versleep"
+          title="Drag to reorder"
+          aria-label="Drag"
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -155,6 +156,7 @@ export default function AmproAdminPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [checking, setChecking] = useState(true)
   const [active, setActive] = useState<AdminSection>('programmas')
+  const [adminMobileMenuOpen, setAdminMobileMenuOpen] = useState(false)
   const [performances, setPerformances] = useState<any[]>([])
   const [locations, setLocations] = useState<any[]>([])
   const [forms, setForms] = useState<any[]>([])
@@ -167,6 +169,13 @@ export default function AmproAdminPage() {
   const [updates, setUpdates] = useState<any[]>([])
   const [corrections, setCorrections] = useState<any[]>([])
   const [profilesByUserId, setProfilesByUserId] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
+
+  async function handleAdminLogout() {
+    const ok = window.confirm('Log out?')
+    if (!ok) return
+    await supabase.auth.signOut()
+    router.push('/ampro')
+  }
 
   function clipNotificationMessage(value: string, maxLen = 140) {
     const v = String(value || '').trim().replace(/\s+/g, ' ')
@@ -221,7 +230,7 @@ export default function AmproAdminPage() {
     try {
       const resp = await fetch(`/api/ampro/program-invites/lookup?token=${encodeURIComponent(t)}`)
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Kon status niet laden')
+      if (!resp.ok) throw new Error(json?.error || 'Failed to load status')
 
       setInviteManageStatus({
         ok: Boolean(json?.status?.ok),
@@ -270,19 +279,19 @@ export default function AmproAdminPage() {
       })
 
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Kon link niet genereren')
+      if (!resp.ok) throw new Error(json?.error || 'Failed to generate link')
 
       const url = String(json?.url || '')
-      if (!url) throw new Error('Geen link ontvangen')
+      if (!url) throw new Error('No link received')
 
       setInviteManageUrl(url)
       setInviteManageToken(json?.token ? String(json.token) : null)
       if (json?.token) {
         await refreshInviteStatus(String(json.token), { syncConfig: true })
       }
-      showSuccess(json?.reused ? 'Bestaande link geladen' : 'Nieuwe link aangemaakt')
+      showSuccess(json?.reused ? 'Existing link loaded' : 'New link created')
     } catch (e: any) {
-      showError(e?.message || 'Kon link niet genereren')
+      showError(e?.message || 'Failed to generate link')
     }
     finally {
       setInviteManageLoading(false)
@@ -298,7 +307,7 @@ export default function AmproAdminPage() {
     if (inviteConfigMaxUses.trim()) {
       const n = Number(inviteConfigMaxUses)
       if (!Number.isFinite(n) || n < 1) {
-        showError('Max uses moet leeg zijn of >= 1')
+        showError('Max uses must be empty or >= 1')
         return
       }
       maxUses = n
@@ -308,7 +317,7 @@ export default function AmproAdminPage() {
     if (inviteConfigExpiresAt.trim()) {
       const d = new Date(inviteConfigExpiresAt)
       if (!Number.isFinite(d.getTime())) {
-        showError('Ongeldige vervaldatum')
+        showError('Invalid expiration date')
         return
       }
       expiresAt = d.toISOString()
@@ -327,12 +336,12 @@ export default function AmproAdminPage() {
         }),
       })
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Opslaan mislukt')
+      if (!resp.ok) throw new Error(json?.error || 'Save failed')
 
       await refreshInviteStatus(token, { syncConfig: true })
-      showSuccess('Instellingen opgeslagen')
+      showSuccess('Settings saved')
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setInviteManageLoading(false)
     }
@@ -356,13 +365,13 @@ export default function AmproAdminPage() {
     if (inviteConfigExpiresAt.trim()) {
       const d = new Date(inviteConfigExpiresAt)
       if (!Number.isFinite(d.getTime())) {
-        showError('Ongeldige vervaldatum')
+        showError('Invalid expiration date')
         return
       }
       expiresAt = d.toISOString()
     }
 
-    if (!window.confirm('Nieuwe link maken met deze instellingen? De huidige link wordt gedeactiveerd.')) return
+    if (!window.confirm('Create a new link with these settings? The current link will be deactivated.')) return
 
     try {
       setInviteManageLoading(true)
@@ -377,17 +386,17 @@ export default function AmproAdminPage() {
         }),
       })
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Kon nieuwe link niet maken')
+      if (!resp.ok) throw new Error(json?.error || 'Failed to create new link')
 
       const url = String(json?.url || '')
-      if (!url) throw new Error('Geen link ontvangen')
+      if (!url) throw new Error('No link received')
 
       setInviteManageUrl(url)
       setInviteManageToken(json?.token ? String(json.token) : null)
       if (json?.token) await refreshInviteStatus(String(json.token))
-      showSuccess('Nieuwe link aangemaakt')
+      showSuccess('New link created')
     } catch (e: any) {
-      showError(e?.message || 'Kon nieuwe link niet maken')
+      showError(e?.message || 'Failed to create new link')
     } finally {
       setInviteManageLoading(false)
     }
@@ -397,16 +406,16 @@ export default function AmproAdminPage() {
     if (!inviteManageUrl) return
     try {
       await navigator.clipboard.writeText(inviteManageUrl)
-      showSuccess('Link gekopieerd')
+      showSuccess('Link copied')
     } catch {
-      window.prompt('Kopieer deze link:', inviteManageUrl)
+      window.prompt('Copy this link:', inviteManageUrl)
     }
   }
 
   async function revokeInviteLinks() {
     const pid = String(inviteManageProgram?.id || '')
     if (!pid) return
-    if (!window.confirm('Groepslink deactiveren? De huidige link werkt dan niet meer.')) return
+    if (!window.confirm('Deactivate group link? The current link will no longer work.')) return
 
     try {
       setInviteManageLoading(true)
@@ -417,15 +426,15 @@ export default function AmproAdminPage() {
         body: JSON.stringify({ performance_id: pid }),
       })
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Deactiveren mislukt')
+      if (!resp.ok) throw new Error(json?.error || 'Deactivation failed')
 
       // Keep the last URL visible for audit/reference, but status will flip to inactive.
       if (tokenBefore) await refreshInviteStatus(String(tokenBefore))
       setInviteDeleteArmed(false)
       setInviteDeleteConfirmText('')
-      showSuccess(`Link gedeactiveerd (${Number(json?.revoked_count || 0)})`)
+      showSuccess(`Link deactivated (${Number(json?.revoked_count || 0)})`)
     } catch (e: any) {
-      showError(e?.message || 'Deactiveren mislukt')
+      showError(e?.message || 'Deactivation failed')
     } finally {
       setInviteManageLoading(false)
     }
@@ -444,7 +453,7 @@ export default function AmproAdminPage() {
 
     // Step 2: require explicit text confirmation
     if (inviteDeleteConfirmText.trim() !== 'DELETE') {
-      showError('Typ DELETE om te bevestigen')
+      showError('Type DELETE to confirm')
       return
     }
 
@@ -456,16 +465,16 @@ export default function AmproAdminPage() {
         body: JSON.stringify({ performance_id: pid, confirm: 'DELETE' }),
       })
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json?.error || 'Verwijderen mislukt')
+      if (!resp.ok) throw new Error(json?.error || 'Delete failed')
 
       setInviteManageUrl('')
       setInviteManageToken(null)
       setInviteManageStatus(null)
       setInviteDeleteArmed(false)
       setInviteDeleteConfirmText('')
-      showSuccess(`Links verwijderd (${Number(json?.deleted_count || 0)})`)
+      showSuccess(`Links deleted (${Number(json?.deleted_count || 0)})`)
     } catch (e: any) {
-      showError(e?.message || 'Verwijderen mislukt')
+      showError(e?.message || 'Delete failed')
     } finally {
       setInviteManageLoading(false)
     }
@@ -490,7 +499,7 @@ export default function AmproAdminPage() {
       const days = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
       return { days, error: '' }
     } catch (e: any) {
-      return { days: [] as string[], error: String(e?.message || 'Ongeldige datum') }
+      return { days: [] as string[], error: String(e?.message || 'Invalid date') }
     }
   }, [availabilityDatesText])
 
@@ -620,7 +629,7 @@ export default function AmproAdminPage() {
 
       setAvailabilityOverview(overview)
     } catch (e: any) {
-      showError(e?.message || 'Kon beschikbaarheid niet laden')
+      showError(e?.message || 'Failed to load availability')
     }
   }
 
@@ -633,13 +642,13 @@ export default function AmproAdminPage() {
 
   async function saveAvailabilityConfig() {
     try {
-      if (!availabilityPerformanceId) throw new Error('Kies een programma')
+      if (!availabilityPerformanceId) throw new Error('Select a program')
       setSavingAvailability(true)
 
       const shouldBroadcast = Boolean(availabilityVisible) && !availabilityWasVisibleRef.current
 
       const desiredDays = Array.from(new Set(parseFlexibleDateListToISODateArray(availabilityDatesText))).sort()
-      if (!desiredDays.length) throw new Error('Voeg minstens 1 datum toe')
+      if (!desiredDays.length) throw new Error('Add at least 1 date')
 
       const desiredLocationByDay: Record<string, string> = {}
       for (const day of desiredDays) {
@@ -648,7 +657,7 @@ export default function AmproAdminPage() {
       }
 
       const selectedUserIds = Array.from(new Set((availabilitySelectedUserIds || []).map(String).filter(Boolean)))
-      if (!selectedUserIds.length) throw new Error('Selecteer minstens 1 user')
+      if (!selectedUserIds.length) throw new Error('Select at least 1 user')
 
       const lockAt = availabilityLockAt.trim() ? parseFlexibleDateToISODate(availabilityLockAt.trim()) : null
 
@@ -678,7 +687,7 @@ export default function AmproAdminPage() {
           .eq('id', requestId)
         if (up.error) throw up.error
       }
-      if (!requestId) throw new Error('Kon request niet opslaan')
+      if (!requestId) throw new Error('Failed to save request')
       setAvailabilityRequestId(requestId)
 
       const existingDatesResp = await supabase
@@ -758,17 +767,17 @@ export default function AmproAdminPage() {
         await broadcastAmproNotification({
           kind: 'availability',
           performanceId: String(availabilityPerformanceId),
-          title: 'Nieuwe beschikbaarheden',
-          message: 'Er is een nieuwe beschikbaarheidsvraag beschikbaar in je AmPro project.',
+          title: 'New availability request',
+          message: 'A new availability request is available in your AmPro project.',
         })
       }
 
       availabilityWasVisibleRef.current = Boolean(availabilityVisible)
 
-      showSuccess('Beschikbaarheid opgeslagen')
+      showSuccess('Availability saved')
       await loadAvailability(availabilityPerformanceId)
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setSavingAvailability(false)
     }
@@ -787,6 +796,7 @@ export default function AmproAdminPage() {
   const [programmaModalOpen, setProgrammaModalOpen] = useState(false)
   const [editingProgrammaId, setEditingProgrammaId] = useState<string | null>(null)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false)
   const [locationModalOpen, setLocationModalOpen] = useState(false)
   const [formModalOpen, setFormModalOpen] = useState(false)
@@ -808,6 +818,10 @@ export default function AmproAdminPage() {
   const [newAdminPaymentUrl, setNewAdminPaymentUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [savingPaid, setSavingPaid] = useState(false)
+
+  const [editingMemberSnapshot, setEditingMemberSnapshot] = useState(false)
+  const [savingMemberSnapshot, setSavingMemberSnapshot] = useState(false)
+  const [memberSnapshotDraft, setMemberSnapshotDraft] = useState<Record<string, string>>({})
 
   const [newFormName, setNewFormName] = useState('')
   const [newFormFields, setNewFormFields] = useState<FormFieldDraft[]>([])
@@ -837,6 +851,7 @@ export default function AmproAdminPage() {
   const [newLocationName, setNewLocationName] = useState('')
   const [newLocationAddress, setNewLocationAddress] = useState('')
   const [savingLocation, setSavingLocation] = useState(false)
+  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null)
 
   const [newUpdatePerformanceId, setNewUpdatePerformanceId] = useState('')
   const [newUpdateTitle, setNewUpdateTitle] = useState('')
@@ -1112,7 +1127,67 @@ export default function AmproAdminPage() {
 
   function openMemberDetail(app: any) {
     setMemberDetailApp(app)
+    setEditingMemberSnapshot(false)
+    const snapshot = (app as any)?.snapshot_json
+    const base = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}
+    setMemberSnapshotDraft({
+      first_name: String((base as any)?.first_name ?? ''),
+      last_name: String((base as any)?.last_name ?? ''),
+      birth_date: String((base as any)?.birth_date ?? ''),
+      email: String((base as any)?.email ?? ''),
+      phone: String((base as any)?.phone ?? ''),
+      street: String((base as any)?.street ?? ''),
+      house_number: String((base as any)?.house_number ?? ''),
+      house_number_addition: String((base as any)?.house_number_addition ?? ''),
+      postal_code: String((base as any)?.postal_code ?? ''),
+      city: String((base as any)?.city ?? ''),
+      instagram_username: String((base as any)?.instagram_username ?? ''),
+      tshirt_size: String((base as any)?.tshirt_size ?? ''),
+    })
     setMemberDetailOpen(true)
+  }
+
+  async function saveMemberSnapshot() {
+    if (!memberDetailApp?.id) return
+    try {
+      setSavingMemberSnapshot(true)
+      const existing = (memberDetailApp as any)?.snapshot_json
+      const next: any = existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing } : {}
+
+      const setOrDelete = (key: string, value: string) => {
+        const v = String(value ?? '').trim()
+        if (!v) {
+          delete next[key]
+        } else {
+          next[key] = v
+        }
+      }
+
+      setOrDelete('first_name', memberSnapshotDraft.first_name)
+      setOrDelete('last_name', memberSnapshotDraft.last_name)
+      setOrDelete('birth_date', memberSnapshotDraft.birth_date)
+      setOrDelete('email', memberSnapshotDraft.email)
+      setOrDelete('phone', memberSnapshotDraft.phone)
+      setOrDelete('street', memberSnapshotDraft.street)
+      setOrDelete('house_number', memberSnapshotDraft.house_number)
+      setOrDelete('house_number_addition', memberSnapshotDraft.house_number_addition)
+      setOrDelete('postal_code', memberSnapshotDraft.postal_code)
+      setOrDelete('city', memberSnapshotDraft.city)
+      setOrDelete('instagram_username', memberSnapshotDraft.instagram_username)
+      setOrDelete('tshirt_size', memberSnapshotDraft.tshirt_size)
+
+      const { error } = await supabase.from('ampro_applications').update({ snapshot_json: next }).eq('id', memberDetailApp.id)
+      if (error) throw error
+
+      setMemberDetailApp((prev: any) => (prev ? { ...prev, snapshot_json: next } : prev))
+      setEditingMemberSnapshot(false)
+      showSuccess('User details updated')
+      await refresh()
+    } catch (e: any) {
+      showError(e?.message || 'Failed to update user details')
+    } finally {
+      setSavingMemberSnapshot(false)
+    }
   }
 
   function openMemberDelete(app: any) {
@@ -1126,12 +1201,12 @@ export default function AmproAdminPage() {
     try {
       const { error } = await supabase.from('ampro_applications').delete().eq('id', memberDeleteApp.id)
       if (error) throw error
-      showSuccess('Member verwijderd')
+      showSuccess('Member deleted')
       setMemberDeleteOpen(false)
       setMemberDeleteApp(null)
       await refresh()
     } catch (e: any) {
-      showError(e?.message || 'Verwijderen mislukt')
+      showError(e?.message || 'Delete failed')
     }
   }
 
@@ -1145,12 +1220,12 @@ export default function AmproAdminPage() {
 
       const { error } = await supabase.from('ampro_applications').update(updates).eq('id', memberDetailApp.id)
       if (error) throw error
-      showSuccess('Betaalstatus bijgewerkt')
+      showSuccess('Payment status updated')
       setMemberDetailOpen(false)
       setMemberDetailApp(null)
       await refresh()
     } catch (e: any) {
-      showError(e?.message || 'Kon betaalstatus niet bijwerken')
+      showError(e?.message || 'Failed to update payment status')
     } finally {
       setSavingPaid(false)
     }
@@ -1182,7 +1257,7 @@ export default function AmproAdminPage() {
   async function saveProgramma() {
     try {
       setSaving(true)
-      if (!newTitle.trim()) throw new Error('Titel is verplicht')
+      if (!newTitle.trim()) throw new Error('Title is required')
 
       const parsedDates = parseFlexibleDateListToISODateArray(newPerformanceDates)
       const rehearsalStart = parseFlexibleDateToISODate(newRehearsalStart)
@@ -1217,7 +1292,7 @@ export default function AmproAdminPage() {
         const { data, error } = await supabase.from('ampro_programmas').insert(payload).select('id').single()
         if (error) throw error
         programmaId = String((data as any)?.id || '')
-        if (!programmaId) throw new Error('Kon programma niet aanmaken (geen id)')
+        if (!programmaId) throw new Error('Failed to create program (no id)')
       }
 
       if (programmaId) {
@@ -1239,9 +1314,9 @@ export default function AmproAdminPage() {
       setProgrammaModalOpen(false)
       await refresh()
 
-      showSuccess(id ? 'Programma bijgewerkt' : 'Programma aangemaakt')
+      showSuccess(id ? 'Program updated' : 'Program created')
     } catch (e: any) {
-      showError(e?.message || (editingProgrammaId ? 'Kon programma niet bijwerken' : 'Kon programma niet aanmaken'))
+      showError(e?.message || (editingProgrammaId ? 'Failed to update program' : 'Failed to create program'))
     } finally {
       setSaving(false)
     }
@@ -1250,22 +1325,22 @@ export default function AmproAdminPage() {
   async function deleteProgram(programId: string) {
     try {
       if (!programId) return
-      if (!confirm('Weet je zeker dat je dit programma wilt verwijderen?')) return
+      if (!confirm('Are you sure you want to delete this program?')) return
       const { error } = await supabase.from('ampro_programmas').delete().eq('id', programId)
       if (error) throw error
       await refresh()
-      showSuccess('Programma verwijderd')
+      showSuccess('Program deleted')
     } catch (e: any) {
-      showError(e?.message || 'Kon programma niet verwijderen')
+      showError(e?.message || 'Failed to delete program')
     }
   }
 
   async function createForm() {
     try {
       setSavingForm(true)
-      if (!newFormName.trim()) throw new Error('Naam is verplicht')
+      if (!newFormName.trim()) throw new Error('Name is required')
 
-      if (!newFormFields.length) throw new Error('Voeg minstens 1 veld toe')
+      if (!newFormFields.length) throw new Error('Add at least 1 field')
 
       const keySet = new Set<string>()
       const built: AmproFormField[] = newFormFields.map((f, idx) => {
@@ -1273,7 +1348,7 @@ export default function AmproAdminPage() {
         const label = (f.label || '').trim()
 
         if (type === 'title') {
-          if (!label) throw new Error('Titel veld moet een label hebben')
+          if (!label) throw new Error('Title field must have a label')
           const key = uniqueKey(label, keySet, 'title')
           return { key, label, type: 'title' } as AmproFormField
         }
@@ -1289,7 +1364,7 @@ export default function AmproAdminPage() {
           } as AmproFormField
         }
 
-        if (!label) throw new Error('Elk veld moet een label hebben')
+        if (!label) throw new Error('Each field must have a label')
         const key = uniqueKey(label, keySet)
 
         if (type === 'select') {
@@ -1305,7 +1380,7 @@ export default function AmproAdminPage() {
             })
             .filter(Boolean) as Array<{ label: string; value: string }>
 
-          if (!options.length) throw new Error(`Select-veld "${label}" moet minstens 1 optie hebben`)
+          if (!options.length) throw new Error(`Select field "${label}" must have at least 1 option`)
 
           return {
             key,
@@ -1489,9 +1564,9 @@ export default function AmproAdminPage() {
       })
 
       await refresh()
-      showSuccess('Statussen opgeslagen')
+      showSuccess('Statuses saved')
     } catch (e: any) {
-      showError(e?.message || 'Kon statussen niet opslaan')
+      showError(e?.message || 'Failed to save statuses')
     } finally {
       setSavingGroup((s) => ({ ...s, [performanceId]: false }))
     }
@@ -1500,9 +1575,31 @@ export default function AmproAdminPage() {
   async function createUpdate() {
     try {
       setSavingUpdate(true)
-      if (!newUpdatePerformanceId) throw new Error('Kies een programma')
-      if (!newUpdateTitle.trim()) throw new Error('Titel is verplicht')
-      if (!newUpdateBody.trim()) throw new Error('Inhoud is verplicht')
+      if (!newUpdatePerformanceId) throw new Error('Select a program')
+      if (!newUpdateTitle.trim()) throw new Error('Title is required')
+      if (!newUpdateBody.trim()) throw new Error('Content is required')
+
+      if (editingNoteId) {
+        const { error } = await supabase
+          .from('ampro_notes')
+          .update({
+            performance_id: newUpdatePerformanceId,
+            title: newUpdateTitle.trim(),
+            body: newUpdateBody.trim(),
+            visibility: 'accepted_only',
+          })
+          .eq('id', editingNoteId)
+
+        if (error) throw error
+
+        setEditingNoteId(null)
+        setNewUpdateTitle('')
+        setNewUpdateBody('')
+        setNoteModalOpen(false)
+        await refresh()
+        showSuccess('Note updated')
+        return
+      }
 
       const existing = (updates || []).filter((u: any) => String(u?.performance_id || '') === String(newUpdatePerformanceId))
       const maxSort = Math.max(0, ...existing.map((u: any) => (Number.isFinite(Number(u?.sort_order)) ? Number(u.sort_order) : 0)))
@@ -1522,28 +1619,60 @@ export default function AmproAdminPage() {
       await broadcastAmproNotification({
         kind: 'note',
         performanceId: String(newUpdatePerformanceId),
-        title: String(newUpdateTitle.trim() || 'Nieuwe note'),
-        message: clipNotificationMessage(newUpdateBody.trim()) || 'Er is een nieuwe note beschikbaar in je AmPro project.',
+        title: String(newUpdateTitle.trim() || 'New note'),
+        message: clipNotificationMessage(newUpdateBody.trim()) || 'A new note is available in your AmPro project.',
       })
 
       setNewUpdateTitle('')
       setNewUpdateBody('')
+      setEditingNoteId(null)
       setNoteModalOpen(false)
       await refresh()
-      showSuccess('Note geplaatst')
+      showSuccess('Note posted')
     } catch (e: any) {
-      showError(e?.message || 'Kon note niet plaatsen')
+      showError(e?.message || 'Failed to post note')
     } finally {
       setSavingUpdate(false)
+    }
+  }
+
+  function openCreateNoteModal() {
+    setEditingNoteId(null)
+    setNewUpdateTitle('')
+    setNewUpdateBody('')
+    setNoteModalOpen(true)
+  }
+
+  function openEditNoteModal(u: any) {
+    setEditingNoteId(String(u?.id || ''))
+    setNewUpdatePerformanceId(String(u?.performance_id || ''))
+    setNewUpdateTitle(String(u?.title || ''))
+    setNewUpdateBody(String(u?.body || ''))
+    setNoteModalOpen(true)
+  }
+
+  async function deleteNote(u: any) {
+    try {
+      const id = String(u?.id || '')
+      if (!id) return
+      const label = String(u?.title || '').trim() || 'note'
+      if (!confirm(`Are you sure you want to delete this note ("${label}")?`)) return
+
+      const { error } = await supabase.from('ampro_notes').delete().eq('id', id)
+      if (error) throw error
+      await refresh()
+      showSuccess('Note deleted')
+    } catch (e: any) {
+      showError(e?.message || 'Failed to delete note')
     }
   }
 
   async function saveCorrection() {
     try {
       setSavingCorrection(true)
-      if (!newCorrectionPerformanceId) throw new Error('Kies een programma')
-      if (!newCorrectionDate.trim()) throw new Error('Datum is verplicht')
-      if (!newCorrectionBody.trim()) throw new Error('Correctie is verplicht')
+      if (!newCorrectionPerformanceId) throw new Error('Select a program')
+      if (!newCorrectionDate.trim()) throw new Error('Date is required')
+      if (!newCorrectionBody.trim()) throw new Error('Correction is required')
 
       const payload = {
         performance_id: newCorrectionPerformanceId,
@@ -1570,8 +1699,8 @@ export default function AmproAdminPage() {
         await broadcastAmproNotification({
           kind: 'correction',
           performanceId: String(newCorrectionPerformanceId),
-          title: String(newCorrectionTitle.trim() || 'Nieuwe correctie'),
-          message: clipNotificationMessage(newCorrectionBody.trim()) || 'Er is een nieuwe correctie beschikbaar in je AmPro project.',
+          title: String(newCorrectionTitle.trim() || 'New correction'),
+          message: clipNotificationMessage(newCorrectionBody.trim()) || 'A new correction is available in your AmPro project.',
         })
       }
 
@@ -1580,9 +1709,9 @@ export default function AmproAdminPage() {
       setCorrectionModalOpen(false)
       setEditingCorrectionId(null)
       await refresh()
-      showSuccess(editingCorrectionId ? 'Correctie bijgewerkt' : 'Correctie toegevoegd')
+      showSuccess(editingCorrectionId ? 'Correction updated' : 'Correction added')
     } catch (e: any) {
-      showError(e?.message || (editingCorrectionId ? 'Kon correctie niet bijwerken' : 'Kon correctie niet toevoegen'))
+      showError(e?.message || (editingCorrectionId ? 'Failed to update correction' : 'Failed to add correction'))
     } finally {
       setSavingCorrection(false)
     }
@@ -1612,14 +1741,14 @@ export default function AmproAdminPage() {
       const id = String(c?.id || '')
       if (!id) return
       const label = c?.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'
-      if (!confirm(`Weet je zeker dat je deze correctie (${label}) wilt verwijderen?`)) return
+      if (!confirm(`Are you sure you want to delete this correction (${label})?`)) return
 
       const { error } = await supabase.from('ampro_corrections').delete().eq('id', id)
       if (error) throw error
       await refresh()
-      showSuccess('Correctie verwijderd')
+      showSuccess('Correction deleted')
     } catch (e: any) {
-      showError(e?.message || 'Kon correctie niet verwijderen')
+      showError(e?.message || 'Failed to delete correction')
     }
   }
 
@@ -1637,16 +1766,16 @@ export default function AmproAdminPage() {
           await broadcastAmproNotification({
             kind: 'correction',
             performanceId: pid,
-            title: String(c?.title || 'Nieuwe correctie'),
-            message: clipNotificationMessage(String(c?.body || '')) || 'Er is een nieuwe correctie beschikbaar in je AmPro project.',
+            title: String(c?.title || 'New correction'),
+            message: clipNotificationMessage(String(c?.body || '')) || 'A new correction is available in your AmPro project.',
           })
         }
       }
 
       await refresh()
-      showSuccess(next ? 'Correctie zichtbaar gezet' : 'Correctie verborgen')
+      showSuccess(next ? 'Correction set visible' : 'Correction hidden')
     } catch (e: any) {
-      showError(e?.message || 'Kon zichtbaarheid niet aanpassen')
+      showError(e?.message || 'Failed to update visibility')
     }
   }
 
@@ -1685,11 +1814,51 @@ export default function AmproAdminPage() {
       setNewLocationAddress('')
       setLocationModalOpen(false)
       await refresh()
-      showSuccess(editingLocationId ? 'Locatie bijgewerkt' : 'Locatie aangemaakt')
+      showSuccess(editingLocationId ? 'Location updated' : 'Location created')
     } catch (e: any) {
-      showError(e?.message || (editingLocationId ? 'Kon locatie niet bijwerken' : 'Kon locatie niet aanmaken'))
+      showError(e?.message || (editingLocationId ? 'Failed to update location' : 'Failed to create location'))
     } finally {
       setSavingLocation(false)
+    }
+  }
+
+  async function deleteLocation(l: any) {
+    const id = String(l?.id || '')
+    if (!id) return
+
+    const label = String(l?.name || id)
+    const ok = window.confirm(
+      `Are you sure you want to delete location "${label}"?\n\nPrograms or availability dates that use this location will lose that link.`,
+    )
+    if (!ok) return
+
+    try {
+      setDeletingLocationId(id)
+
+      // Best-effort: unlink from referencing rows first (in case FK isn't ON DELETE SET NULL).
+      try {
+        const upPrograms = await supabase.from('ampro_programmas').update({ location_id: null }).eq('location_id', id)
+        if (upPrograms.error) throw upPrograms.error
+      } catch {
+        // ignore
+      }
+
+      try {
+        const upDates = await supabase.from('ampro_availability_request_dates').update({ location_id: null }).eq('location_id', id)
+        if (upDates.error) throw upDates.error
+      } catch {
+        // ignore
+      }
+
+      const del = await supabase.from('ampro_locations').delete().eq('id', id)
+      if (del.error) throw del.error
+
+      showSuccess('Location deleted')
+      await refresh()
+    } catch (e: any) {
+      showError(e?.message || 'Failed to delete location')
+    } finally {
+      setDeletingLocationId(null)
     }
   }
 
@@ -1706,14 +1875,51 @@ export default function AmproAdminPage() {
   }, {})
 
   const sidebarItems: Array<{ key: AdminSection; label: string; icon: any }> = [
-    { key: 'programmas', label: "Programma's", icon: BookOpen },
+    { key: 'programmas', label: 'Programs', icon: BookOpen },
     { key: 'forms', label: 'Forms', icon: FileText },
-    { key: 'locations', label: 'Locaties', icon: MapPin },
-    { key: 'availability', label: 'Beschikbaarheid', icon: Calendar },
+    { key: 'locations', label: 'Locations', icon: MapPin },
+    { key: 'availability', label: 'Availability', icon: Calendar },
     { key: 'notes', label: 'Notes', icon: MessageSquare },
-    { key: 'corrections', label: 'Correcties', icon: Edit2 },
-    { key: 'applications', label: 'Applicaties', icon: ClipboardList },
+    { key: 'corrections', label: 'Corrections', icon: Edit2 },
+    { key: 'applications', label: 'Applications', icon: ClipboardList },
     { key: 'members', label: 'Members', icon: Users },
+  ]
+
+  const activeAdminLabel = sidebarItems.find((x) => x.key === active)?.label || 'Admin'
+
+  const adminMobileSections: MobileSidebarSection[] = [
+    {
+      title: 'Admin menu',
+      items: sidebarItems.map((item) => ({
+        label: item.label,
+        icon: item.icon,
+        onClick: () => {
+          setActive(item.key)
+          setAdminMobileMenuOpen(false)
+        },
+      })),
+    },
+    {
+      title: 'Navigation',
+      items: [
+        {
+          label: 'Back to AmPro',
+          onClick: () => {
+            router.push('/ampro')
+            setAdminMobileMenuOpen(false)
+          },
+        },
+        {
+          label: 'Log out',
+          onClick: async () => {
+            setAdminMobileMenuOpen(false)
+            await handleAdminLogout()
+          },
+          icon: LogOut,
+          tone: 'danger',
+        },
+      ],
+    },
   ]
 
   const filteredProgrammas = (() => {
@@ -1786,9 +1992,9 @@ export default function AmproAdminPage() {
 
     try {
       await persistSortOrder('ampro_notes', moved, pid)
-      showSuccess('Volgorde notes opgeslagen')
+      showSuccess('Notes order saved')
     } catch (e: any) {
-      showError(e?.message || 'Kon volgorde notes niet opslaan')
+      showError(e?.message || 'Failed to save notes order')
     }
   }
 
@@ -1807,9 +2013,9 @@ export default function AmproAdminPage() {
 
     try {
       await persistSortOrder('ampro_corrections', moved, pid)
-      showSuccess('Volgorde correcties opgeslagen')
+      showSuccess('Corrections order saved')
     } catch (e: any) {
-      showError(e?.message || 'Kon volgorde correcties niet opslaan')
+      showError(e?.message || 'Failed to save corrections order')
     }
   }
 
@@ -1834,6 +2040,33 @@ export default function AmproAdminPage() {
     if (memberFilterPaid === 'unpaid' && a.paid) return false
     return true
   })
+
+  const groupedMembers = (() => {
+    const byUser = new Map<
+      string,
+      {
+        userId: string
+        name: string
+        rows: any[]
+      }
+    >()
+
+    for (const a of filteredMembers) {
+      const userId = String(a?.user_id || '')
+      if (!userId) continue
+      const profile = profilesByUserId[userId]
+      const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
+
+      const existing = byUser.get(userId)
+      if (existing) {
+        existing.rows.push(a)
+      } else {
+        byUser.set(userId, { userId, name, rows: [a] })
+      }
+    }
+
+    return Array.from(byUser.values()).sort((a, b) => a.name.localeCompare(b.name))
+  })()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1869,66 +2102,76 @@ export default function AmproAdminPage() {
 
           <div className="px-5 pb-5">
             <Link href="/ampro" className="text-sm font-semibold text-gray-900">
-              ← Terug
+              ← Back
             </Link>
           </div>
         </div>
       </div>
 
       <div className="md:pl-64">
+        <nav className="md:hidden bg-white border-b border-gray-200 sticky top-0 z-40 overflow-hidden">
+          <div className="px-4">
+            <div className="flex justify-between items-center h-12">
+              <button
+                onClick={() => setAdminMobileMenuOpen(true)}
+                className="p-2 rounded-md text-slate-700 hover:bg-slate-100"
+                aria-label="Open admin menu"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+
+              <div className="text-sm font-semibold text-gray-900 truncate">{activeAdminLabel}</div>
+
+              <div className="w-10" />
+            </div>
+          </div>
+
+          <MobileSidebar
+            open={adminMobileMenuOpen}
+            onClose={() => setAdminMobileMenuOpen(false)}
+            onOpen={() => setAdminMobileMenuOpen(true)}
+            sections={adminMobileSections}
+            header={
+              <div>
+                <div className="font-semibold text-slate-900">The AmProProject</div>
+                <div className="text-xs text-slate-500">Admin</div>
+              </div>
+            }
+          />
+        </nav>
+
         <main className="p-4 md:p-6 lg:p-8">
           <div className="mx-auto max-w-5xl">
-            <div className="md:hidden mb-4 rounded-2xl border border-gray-200 bg-white p-2">
-              <div className="flex gap-2 overflow-x-auto">
-                {sidebarItems.map((item) => {
-                  const isActive = active === item.key
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setActive(item.key)}
-                      className={
-                        'whitespace-nowrap rounded-3xl px-3 py-2 text-sm font-semibold ' +
-                        (isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700')
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             <Modal
               isOpen={programmaModalOpen}
               onClose={() => setProgrammaModalOpen(false)}
-              ariaLabel={editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}
+              ariaLabel={editingProgrammaId ? 'Edit program' : 'New program'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">{editingProgrammaId ? 'Programma bewerken' : 'Nieuw programma'}</h2>
-              <p className="mt-1 text-sm text-gray-600">Vul de velden in.</p>
+              <h2 className="text-xl font-bold text-gray-900">{editingProgrammaId ? 'Edit program' : 'New program'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Fill in the fields.</p>
 
               <div className="mt-6 grid gap-4">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Type programma
+                  Program type
                   <select
                     value={newProgramType}
                     onChange={(e) => setNewProgramType(e.target.value as any)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="performance">Voorstelling Project</option>
+                    <option value="performance">Performance project</option>
                     <option value="workshop">Workshop</option>
                   </select>
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Locatie
+                  Location
                   <select
                     value={newLocationId}
                     onChange={(e) => setNewLocationId(e.target.value)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="">Geen locatie</option>
+                    <option value="">No location</option>
                     {locations.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.name}
@@ -1938,21 +2181,21 @@ export default function AmproAdminPage() {
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Titel
+                  Title
                   <input
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="Titel"
+                    placeholder="Title"
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Beschrijving
+                  Description
                   <textarea
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Beschrijving (optioneel)"
+                    placeholder="Description (optional)"
                     className="min-h-28 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -1972,12 +2215,12 @@ export default function AmproAdminPage() {
                   </label>
 
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Betaal URL (optioneel)
+                    Payment URL (optional)
                     <input
                       type="text"
                       value={newAdminPaymentUrl}
                       onChange={(e) => setNewAdminPaymentUrl(e.target.value)}
-                      placeholder="https://voorbeeld.nl/betaal/123"
+                      placeholder="https://example.com/pay/123"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
@@ -1985,11 +2228,11 @@ export default function AmproAdminPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Regio
+                    Region
                     <input
                       value={newRegion}
                       onChange={(e) => setNewRegion(e.target.value)}
-                      placeholder="Regio"
+                      placeholder="Region"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
@@ -1999,20 +2242,20 @@ export default function AmproAdminPage() {
                     <input
                       value={newApplicationDeadline}
                       onChange={(e) => setNewApplicationDeadline(e.target.value)}
-                      placeholder="dd/mm/jjjj"
+                      placeholder="dd/mm/yyyy"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
                 </div>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Formulier (voor inschrijving)
+                  Form (for application)
                   <select
                     value={newFormId}
                     onChange={(e) => setNewFormId(e.target.value)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="">Geen formulier</option>
+                    <option value="">No form</option>
                     {forms.map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.name}
@@ -2023,31 +2266,31 @@ export default function AmproAdminPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Repetitie start
+                    Rehearsal start
                     <input
                       value={newRehearsalStart}
                       onChange={(e) => setNewRehearsalStart(e.target.value)}
-                      placeholder="dd/mm/jjjj"
+                      placeholder="dd/mm/yyyy"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Repetitie einde
+                    Rehearsal end
                     <input
                       value={newRehearsalEnd}
                       onChange={(e) => setNewRehearsalEnd(e.target.value)}
-                      placeholder="dd/mm/jjjj"
+                      placeholder="dd/mm/yyyy"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                     />
                   </label>
                 </div>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Data voorstellingen
+                  Performance dates
                   <textarea
                     value={newPerformanceDates}
                     onChange={(e) => setNewPerformanceDates(e.target.value)}
-                    placeholder="dd/mm/jjjj (1 per lijn of komma gescheiden)"
+                    placeholder="dd/mm/yyyy (one per line or comma-separated)"
                     className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -2060,7 +2303,7 @@ export default function AmproAdminPage() {
                       onChange={(e) => setNewIsPublic(e.target.checked)}
                       className="h-4 w-4 rounded border-gray-300"
                     />
-                    Publiek zichtbaar
+                      Publicly visible
                   </label>
                   <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
                     <input
@@ -2069,7 +2312,7 @@ export default function AmproAdminPage() {
                       onChange={(e) => setNewApplicationsOpen(e.target.checked)}
                       className="h-4 w-4 rounded border-gray-300"
                     />
-                    Inschrijvingen open
+                      Applications open
                   </label>
                 </div>
 
@@ -2082,7 +2325,7 @@ export default function AmproAdminPage() {
                       saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {saving ? 'Opslaan…' : editingProgrammaId ? 'Opslaan' : 'Aanmaken'}
+                    {saving ? 'Saving…' : editingProgrammaId ? 'Save' : 'Create'}
                   </button>
                 </div>
               </div>
@@ -2095,38 +2338,38 @@ export default function AmproAdminPage() {
                 setEditingFormId(null)
                 setCollapsedFormFieldById({})
               }}
-              ariaLabel={editingFormId ? 'Formulier bewerken' : 'Nieuwe form'}
+              ariaLabel={editingFormId ? 'Edit form' : 'New form'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">{editingFormId ? 'Formulier bewerken' : 'Nieuwe form'}</h2>
-              <p className="mt-1 text-sm text-gray-600">Maak een inschrijfformulier voor een programma.</p>
+              <h2 className="text-xl font-bold text-gray-900">{editingFormId ? 'Edit form' : 'New form'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Create an application form for a program.</p>
 
               <div className="mt-6 grid gap-3">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Naam
+                  Name
                   <input
                     value={newFormName}
                     onChange={(e) => setNewFormName(e.target.value)}
-                    placeholder="Naam"
+                    placeholder="Name"
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
                 <div className="rounded-3xl border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-gray-900">Velden</div>
+                    <div className="text-sm font-semibold text-gray-900">Fields</div>
                     <button
                       type="button"
                       onClick={() => setNewFormFields((prev) => [...prev, makeEmptyFieldDraft()])}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                       <Plus className="h-4 w-4" />
-                      Veld toevoegen
+                      Add field
                     </button>
                   </div>
 
                   {newFormFields.length === 0 ? (
-                    <div className="mt-3 text-sm text-gray-600">Nog geen velden. Klik op “Veld toevoegen”.</div>
+                    <div className="mt-3 text-sm text-gray-600">No fields yet. Click “Add field”.</div>
                   ) : null}
 
                   <div className="mt-4">
@@ -2142,10 +2385,10 @@ export default function AmproAdminPage() {
                             const isCollapsed = Boolean(collapsedFormFieldById[String(field.id)])
 
                             const labelPreview = (field.label || '').trim()
-                            const title = labelPreview ? labelPreview : `Veld ${idx + 1}`
+                            const title = labelPreview ? labelPreview : `Field ${idx + 1}`
                             const metaParts = [
-                              isTitle ? 'Titel' : isInfo ? 'Info' : `Type: ${field.type}`,
-                              isAnswerField && field.required ? 'Verplicht' : null,
+                              isTitle ? 'Title' : isInfo ? 'Info' : `Type: ${field.type}`,
+                              isAnswerField && field.required ? 'Required' : null,
                             ].filter(Boolean)
 
                             return (
@@ -2172,7 +2415,7 @@ export default function AmproAdminPage() {
                                       onClick={() => setNewFormFields((prev) => prev.filter((f) => f.id !== field.id))}
                                       className="text-sm font-semibold text-red-700 hover:text-red-800 shrink-0"
                                     >
-                                      Verwijder
+                                      Remove
                                     </button>
                                   </div>
 
@@ -2180,14 +2423,14 @@ export default function AmproAdminPage() {
                                     <div className="mt-3 grid gap-3">
                                       <div className="grid grid-cols-1 gap-3">
                                         <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                          {isInfo ? 'Titel (optioneel)' : isTitle ? 'Titel' : 'Label'}
+                                          {isInfo ? 'Title (optional)' : isTitle ? 'Title' : 'Label'}
                                           <input
                                             value={field.label}
                                             onChange={(e) => {
                                               const nextLabel = e.target.value
                                               setNewFormFields((prev) => prev.map((f) => (f.id === field.id ? { ...f, label: nextLabel } : f)))
                                             }}
-                                            placeholder={isInfo ? 'bv. Belangrijk' : isTitle ? 'bv. Persoonlijke info' : 'bv. Ervaring'}
+                                            placeholder={isInfo ? 'e.g. Important' : isTitle ? 'e.g. Personal info' : 'e.g. Experience'}
                                             className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                           />
                                         </label>
@@ -2220,13 +2463,13 @@ export default function AmproAdminPage() {
                                             }}
                                             className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                           >
-                                            <option value="text">Tekst</option>
-                                            <option value="textarea">Tekstvak (groot)</option>
-                                            <option value="date">Datum</option>
-                                            <option value="select">Keuzelijst</option>
+                                            <option value="text">Text</option>
+                                            <option value="textarea">Textarea (large)</option>
+                                            <option value="date">Date</option>
+                                            <option value="select">Select</option>
                                             <option value="checkbox">Checkbox</option>
-                                            <option value="title">Titel (sectie)</option>
-                                            <option value="info">Info tekst (geen input)</option>
+                                            <option value="title">Title (section)</option>
+                                            <option value="info">Info text (no input)</option>
                                           </select>
                                         </label>
 
@@ -2242,16 +2485,16 @@ export default function AmproAdminPage() {
                                               }
                                               className="h-4 w-4 rounded border-gray-300"
                                             />
-                                            Verplicht
+                                              Required
                                           </label>
                                         ) : (
-                                          <div className="mt-7 text-xs text-gray-500">Geen input veld</div>
+                                            <div className="mt-7 text-xs text-gray-500">No input field</div>
                                         )}
                                       </div>
 
                                       {isInfo ? (
                                         <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                          Info tekst
+                                          Info text
                                           <textarea
                                             value={field.text}
                                             onChange={(e) =>
@@ -2259,7 +2502,7 @@ export default function AmproAdminPage() {
                                                 prev.map((f) => (f.id === field.id ? { ...f, text: e.target.value } : f)),
                                               )
                                             }
-                                            placeholder="Tekst die op het formulier wordt getoond…"
+                                            placeholder="Text shown on the form…"
                                             className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                                           />
                                         </label>
@@ -2267,7 +2510,7 @@ export default function AmproAdminPage() {
 
                                       {showPlaceholder ? (
                                         <label className="grid gap-1 text-sm font-medium text-gray-700">
-                                          Placeholder (optioneel)
+                                          Placeholder (optional)
                                           <input
                                             value={field.placeholder}
                                             onChange={(e) =>
@@ -2275,7 +2518,7 @@ export default function AmproAdminPage() {
                                                 prev.map((f) => (f.id === field.id ? { ...f, placeholder: e.target.value } : f)),
                                               )
                                             }
-                                            placeholder="Tekst in het veld…"
+                                            placeholder="Text in the field…"
                                             className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                           />
                                         </label>
@@ -2284,7 +2527,7 @@ export default function AmproAdminPage() {
                                       {isSelect ? (
                                         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                           <div className="flex items-center justify-between gap-3">
-                                            <div className="text-sm font-semibold text-gray-900">Opties</div>
+                                            <div className="text-sm font-semibold text-gray-900">Options</div>
                                             <button
                                               type="button"
                                               onClick={() =>
@@ -2298,7 +2541,7 @@ export default function AmproAdminPage() {
                                               }
                                               className="text-sm font-semibold rounded-3xl text-blue-700 hover:text-blue-800"
                                             >
-                                              + optie
+                                              + option
                                             </button>
                                           </div>
 
@@ -2340,7 +2583,7 @@ export default function AmproAdminPage() {
                                                         }),
                                                       )
                                                     }}
-                                                    placeholder="(optioneel)"
+                                                    placeholder="(optional)"
                                                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                                   />
                                                 </label>
@@ -2356,12 +2599,12 @@ export default function AmproAdminPage() {
                                                   }
                                                   className="h-11 rounded-3xl px-3 text-sm font-semibold bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
                                                 >
-                                                  Verwijder
+                                                  Remove
                                                 </button>
                                               </div>
                                             ))}
                                           </div>
-                                          <div className="mt-2 text-xs text-gray-600">Laat “Value” leeg om automatisch af te leiden uit het label.</div>
+                                          <div className="mt-2 text-xs text-gray-600">Leave “Value” empty to auto-derive it from the label.</div>
                                         </div>
                                       ) : null}
                                     </div>
@@ -2385,7 +2628,7 @@ export default function AmproAdminPage() {
                       savingForm ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {savingForm ? 'Opslaan…' : editingFormId ? 'Opslaan' : 'Aanmaken'}
+                    {savingForm ? 'Saving…' : editingFormId ? 'Save' : 'Create'}
                   </button>
                 </div>
               </div>
@@ -2397,12 +2640,12 @@ export default function AmproAdminPage() {
                 if (inviteManageLoading) return
                 setInviteManageOpen(false)
               }}
-              ariaLabel="Groepslink beheren"
+              ariaLabel="Manage group link"
               contentStyle={{ maxWidth: 720 }}
             >
-              <h2 className="text-xl font-bold text-gray-900">Groepslink beheren</h2>
+              <h2 className="text-xl font-bold text-gray-900">Manage group link</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Programma: <span className="font-semibold">{inviteManageProgram?.title || ''}</span>
+                Program: <span className="font-semibold">{inviteManageProgram?.title || ''}</span>
               </p>
 
               <div className="mt-6 grid gap-3">
@@ -2410,17 +2653,26 @@ export default function AmproAdminPage() {
                   <div
                     className={`rounded-2xl border px-4 py-3 text-sm ${
                       inviteManageStatus.ok
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                        ? 'border-green-200 bg-green-50 text-green-900'
                         : 'border-amber-200 bg-amber-50 text-amber-900'
                     }`}
                   >
                     <div className="font-semibold">
-                      Status: {inviteManageStatus.ok ? 'Actief' : inviteManageStatus.revoked ? 'Gedeactiveerd' : inviteManageStatus.expired ? 'Verlopen' : inviteManageStatus.maxed ? 'Vol' : 'Niet actief'}
+                      Status:{' '}
+                      {inviteManageStatus.ok
+                        ? 'Active'
+                        : inviteManageStatus.revoked
+                          ? 'Deactivated'
+                          : inviteManageStatus.expired
+                            ? 'Expired'
+                            : inviteManageStatus.maxed
+                              ? 'Full'
+                              : 'Inactive'}
                     </div>
                     <div className="mt-1 text-xs">
-                      Gebruikt: {inviteManageStatus.uses_count}
+                      Used: {inviteManageStatus.uses_count}
                       {inviteManageStatus.max_uses != null ? ` / ${inviteManageStatus.max_uses}` : ''}
-                      {inviteManageStatus.expires_at ? ` • Verloopt: ${new Date(inviteManageStatus.expires_at).toLocaleString()}` : ''}
+                      {inviteManageStatus.expires_at ? ` • Expires: ${new Date(inviteManageStatus.expires_at).toLocaleString()}` : ''}
                     </div>
                   </div>
                 ) : null}
@@ -2428,7 +2680,7 @@ export default function AmproAdminPage() {
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Link
                   <input
-                    value={inviteManageUrl || (inviteManageLoading ? 'Laden…' : '')}
+                    value={inviteManageUrl || (inviteManageLoading ? 'Loading…' : '')}
                     readOnly
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
@@ -2436,7 +2688,7 @@ export default function AmproAdminPage() {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Max aantal gebruikers (optioneel)
+                    Max users (optional)
                     <input
                       value={inviteConfigMaxUses}
                       onChange={(e) => {
@@ -2444,14 +2696,14 @@ export default function AmproAdminPage() {
                         setInviteConfigDirty(true)
                       }}
                       inputMode="numeric"
-                      placeholder="(onbeperkt)"
+                      placeholder="(unlimited)"
                       className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                       disabled={inviteManageLoading}
                     />
                   </label>
 
                   <label className="grid gap-1 text-sm font-medium text-gray-700">
-                    Vervaldatum (optioneel)
+                    Expiration date (optional)
                     <input
                       type="datetime-local"
                       value={inviteConfigExpiresAt}
@@ -2472,7 +2724,7 @@ export default function AmproAdminPage() {
                     disabled={inviteManageLoading || !inviteManageProgram?.id}
                     className="h-11 rounded-3xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
-                    {inviteDeleteArmed ? 'Bevestig verwijderen' : 'Verwijder links'}
+                    {inviteDeleteArmed ? 'Confirm delete' : 'Delete links'}
                   </button>
 
                   <button
@@ -2481,7 +2733,7 @@ export default function AmproAdminPage() {
                     disabled={inviteManageLoading || !inviteManageProgram?.id}
                     className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Deactiveer
+                    Deactivate
                   </button>
 
                   <button
@@ -2502,7 +2754,7 @@ export default function AmproAdminPage() {
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {inviteManageLoading ? 'Opslaan…' : 'Opslaan'}
+                    {inviteManageLoading ? 'Saving…' : 'Save'}
                   </button>
 
                   <button
@@ -2511,7 +2763,7 @@ export default function AmproAdminPage() {
                     disabled={inviteManageLoading || !inviteManageProgram?.id}
                     className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Nieuwe link (met limiet)
+                    New link (with limit)
                   </button>
 
                   <button
@@ -2524,20 +2776,20 @@ export default function AmproAdminPage() {
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    Kopieer link
+                    Copy link
                   </button>
                 </div>
 
                 {inviteDeleteArmed ? (
                   <div className="mt-2 rounded-2xl border border-red-200 bg-red-50 p-4">
-                    <div className="text-sm font-semibold text-red-900">Let op: dit verwijdert alle groepslinks voor dit programma.</div>
-                    <div className="mt-1 text-xs text-red-800">Bestaande links in je groepschat werken dan niet meer.</div>
+                    <div className="text-sm font-semibold text-red-900">Warning: this deletes all group links for this program.</div>
+                    <div className="mt-1 text-xs text-red-800">Existing links in your group chat will stop working.</div>
 
                     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                       <input
                         value={inviteDeleteConfirmText}
                         onChange={(e) => setInviteDeleteConfirmText(e.target.value)}
-                        placeholder="Typ DELETE om te bevestigen"
+                        placeholder="Type DELETE to confirm"
                         className="h-11 rounded-2xl border border-red-200 bg-white px-3 text-sm"
                         disabled={inviteManageLoading}
                       />
@@ -2550,7 +2802,7 @@ export default function AmproAdminPage() {
                         disabled={inviteManageLoading}
                         className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                       >
-                        Annuleer
+                        Cancel
                       </button>
                     </div>
                   </div>
@@ -2558,14 +2810,14 @@ export default function AmproAdminPage() {
 
                 {inviteManageToken ? (
                   <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">
-                    <div>Token: {inviteManageStatus?.ok ? 'actief' : 'niet actief'}</div>
+                    <div>Token: {inviteManageStatus?.ok ? 'active' : 'inactive'}</div>
                     <button
                       type="button"
                       onClick={() => refreshInviteStatus(inviteManageToken)}
                       disabled={inviteManageLoading}
                       className="font-semibold text-gray-900 hover:text-blue-600 disabled:opacity-50"
                     >
-                      Ververs status
+                      Refresh status
                     </button>
                   </div>
                 ) : null}
@@ -2575,21 +2827,21 @@ export default function AmproAdminPage() {
             <Modal
               isOpen={correctionModalOpen}
               onClose={() => setCorrectionModalOpen(false)}
-              ariaLabel="Nieuwe correctie"
+              ariaLabel="New correction"
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-2xl font-bold text-gray-900">{editingCorrectionId ? 'Correctie bewerken' : 'Nieuwe correctie'}</h2>
-              <p className="mt-1 text-sm text-gray-600">Je kan kiezen of deze zichtbaar is voor geaccepteerde users.</p>
+              <h2 className="text-2xl font-bold text-gray-900">{editingCorrectionId ? 'Edit correction' : 'New correction'}</h2>
+              <p className="mt-1 text-sm text-gray-600">You can choose whether this is visible to accepted users.</p>
 
               <div className="mt-6 grid gap-3">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Programma
+                  Program
                   <select
                     value={newCorrectionPerformanceId}
                     onChange={(e) => setNewCorrectionPerformanceId(e.target.value)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="">Kies een programma</option>
+                    <option value="">Select a program</option>
                     {performances.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title}
@@ -2599,7 +2851,7 @@ export default function AmproAdminPage() {
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Datum
+                  Date
                   <input
                     type="date"
                     value={newCorrectionDate}
@@ -2609,12 +2861,12 @@ export default function AmproAdminPage() {
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Titel (optioneel)
+                  Title (optional)
                   <input
                     type="text"
                     value={newCorrectionTitle}
                     onChange={(e) => setNewCorrectionTitle(e.target.value)}
-                    placeholder="Bv. Armpositie in bar 3"
+                    placeholder="e.g. Arm position in bar 3"
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
@@ -2626,15 +2878,15 @@ export default function AmproAdminPage() {
                     onChange={(e) => setNewCorrectionVisibleToAccepted(e.target.checked)}
                     className="h-4 w-4 rounded border-gray-300"
                   />
-                  Zichtbaar voor geaccepteerde users
+                  Visible to accepted users
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Correctie
+                  Correction
                   <textarea
                     value={newCorrectionBody}
                     onChange={(e) => setNewCorrectionBody(e.target.value)}
-                    placeholder="Beschrijving van de correctie…"
+                    placeholder="Correction description…"
                     className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -2648,7 +2900,7 @@ export default function AmproAdminPage() {
                       savingCorrection ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {savingCorrection ? 'Opslaan…' : editingCorrectionId ? 'Bijwerken' : 'Plaatsen'}
+                    {savingCorrection ? 'Saving…' : editingCorrectionId ? 'Update' : 'Post'}
                   </button>
                 </div>
               </div>
@@ -2656,22 +2908,25 @@ export default function AmproAdminPage() {
 
             <Modal
               isOpen={noteModalOpen}
-              onClose={() => setNoteModalOpen(false)}
-              ariaLabel="Nieuwe note"
+              onClose={() => {
+                setNoteModalOpen(false)
+                setEditingNoteId(null)
+              }}
+              ariaLabel={editingNoteId ? 'Edit note' : 'New note'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-2xl font-bold text-gray-900">Nieuwe note</h2>
-              <p className="mt-1 text-sm text-gray-600">Note wordt zichtbaar voor geaccepteerde users.</p>
+              <h2 className="text-2xl font-bold text-gray-900">{editingNoteId ? 'Edit note' : 'New note'}</h2>
+              <p className="mt-1 text-sm text-gray-600">This note will be visible to accepted users.</p>
 
               <div className="mt-6 grid gap-3">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Programma
+                  Program
                   <select
                     value={newUpdatePerformanceId}
                     onChange={(e) => setNewUpdatePerformanceId(e.target.value)}
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   >
-                    <option value="">Kies een programma</option>
+                    <option value="">Select a program</option>
                     {performances.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title}
@@ -2681,21 +2936,21 @@ export default function AmproAdminPage() {
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Titel
+                  Title
                   <input
                     value={newUpdateTitle}
                     onChange={(e) => setNewUpdateTitle(e.target.value)}
-                    placeholder="Titel"
+                    placeholder="Title"
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Inhoud
+                  Content
                   <textarea
                     value={newUpdateBody}
                     onChange={(e) => setNewUpdateBody(e.target.value)}
-                    placeholder="Inhoud"
+                    placeholder="Content"
                     className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -2709,7 +2964,7 @@ export default function AmproAdminPage() {
                       savingUpdate ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {savingUpdate ? 'Opslaan…' : 'Plaatsen'}
+                    {savingUpdate ? 'Saving…' : editingNoteId ? 'Update' : 'Post'}
                   </button>
                 </div>
               </div>
@@ -2718,29 +2973,29 @@ export default function AmproAdminPage() {
             <Modal
               isOpen={locationModalOpen}
               onClose={() => setLocationModalOpen(false)}
-              ariaLabel={editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}
+              ariaLabel={editingLocationId ? 'Edit location' : 'New location'}
               contentStyle={{ maxWidth: 760 }}
             >
-              <h2 className="text-2xl font-bold text-gray-900">{editingLocationId ? 'Locatie bewerken' : 'Nieuwe locatie'}</h2>
-              <p className="mt-1 text-sm text-gray-600">Voeg een locatie toe die je kan koppelen aan programma’s.</p>
+              <h2 className="text-2xl font-bold text-gray-900">{editingLocationId ? 'Edit location' : 'New location'}</h2>
+              <p className="mt-1 text-sm text-gray-600">Add a location you can link to programs.</p>
 
               <div className="mt-6 grid gap-3">
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Naam
+                  Name
                   <input
                     value={newLocationName}
                     onChange={(e) => setNewLocationName(e.target.value)}
-                    placeholder="Naam"
+                    placeholder="Name"
                     className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                   />
                 </label>
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
-                  Adres
+                  Address
                   <textarea
                     value={newLocationAddress}
                     onChange={(e) => setNewLocationAddress(e.target.value)}
-                    placeholder="Adres (optioneel)"
+                    placeholder="Address (optional)"
                     className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -2754,7 +3009,7 @@ export default function AmproAdminPage() {
                       savingLocation ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {savingLocation ? 'Opslaan…' : editingLocationId ? 'Opslaan' : 'Aanmaken'}
+                    {savingLocation ? 'Saving…' : editingLocationId ? 'Save' : 'Create'}
                   </button>
                 </div>
               </div>
@@ -2762,8 +3017,12 @@ export default function AmproAdminPage() {
 
             <Modal
               isOpen={memberDetailOpen}
-              onClose={() => setMemberDetailOpen(false)}
-              ariaLabel="Member gegevens"
+              onClose={() => {
+                setMemberDetailOpen(false)
+                setEditingMemberSnapshot(false)
+                setMemberDetailApp(null)
+              }}
+              ariaLabel="Member details"
               contentStyle={{ maxWidth: 760 }}
             >
               {memberDetailApp
@@ -2783,20 +3042,22 @@ export default function AmproAdminPage() {
                     )
 
                     const formattedSnapshotRows: Array<{ label: string; value: string }> = [
-                      { label: 'Voornaam', value: String(snapshot.first_name || '') },
-                      { label: 'Achternaam', value: String(snapshot.last_name || '') },
-                      { label: 'Geboortedatum', value: String(snapshot.birth_date || '') },
+                      { label: 'First name', value: String(snapshot.first_name || '') },
+                      { label: 'Last name', value: String(snapshot.last_name || '') },
+                      { label: 'Birth date', value: String(snapshot.birth_date || '') },
                       { label: 'Email', value: String(snapshot.email || '') },
-                      { label: 'Telefoon', value: String(snapshot.phone || '') },
-                      { label: 'Straat', value: String(snapshot.street || '') },
-                      { label: 'Huisnummer', value: String(snapshot.house_number || '') },
-                      { label: 'Toevoeging', value: String(snapshot.house_number_addition || '') },
-                      { label: 'Postcode', value: String(snapshot.postal_code || '') },
-                      { label: 'Gemeente', value: String(snapshot.city || '') },
+                      { label: 'Phone', value: String(snapshot.phone || '') },
+                      { label: 'Instagram', value: String(snapshot.instagram_username || '') },
+                      { label: 'T-shirt size', value: String(snapshot.tshirt_size || '') },
+                      { label: 'Street', value: String(snapshot.street || '') },
+                      { label: 'House number', value: String(snapshot.house_number || '') },
+                      { label: 'Addition', value: String(snapshot.house_number_addition || '') },
+                      { label: 'Postal code', value: String(snapshot.postal_code || '') },
+                      { label: 'City', value: String(snapshot.city || '') },
                     ].map((r) => ({ label: r.label, value: r.value.trim() }))
 
                     function formatAnswer(field: AmproFormField, raw: any): string {
-                      if (field.type === 'checkbox') return raw ? 'Ja' : 'Nee'
+                      if (field.type === 'checkbox') return raw ? 'Yes' : 'No'
                       if (raw == null) return ''
                       const v = typeof raw === 'string' ? raw : String(raw)
                       if (field.type === 'select') {
@@ -2809,18 +3070,18 @@ export default function AmproAdminPage() {
                     return (
                       <div className="space-y-6">
                         <div>
-                          <h2 className="text-2xl font-bold text-gray-900">User gegevens</h2>
+                          <h2 className="text-2xl font-bold text-gray-900">User details</h2>
                         </div>
 
                         <div>
                           <div className="text-sm font-semibold text-gray-900">{name}</div>
-                          <div className="mt-1 text-sm text-gray-600">Voorstelling: {perfTitle}</div>
+                          <div className="mt-1 text-sm text-gray-600">Performance: {perfTitle}</div>
                           <div className="mt-1 text-xs text-gray-500">Status: {String(memberDetailApp.status || '')}</div>
                           <div className="mt-2 flex items-center gap-3">
                             {((memberDetailApp as any)?.paid) ? (
-                              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Betaald</span>
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Paid</span>
                             ) : (
-                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Onbetaald</span>
+                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Unpaid</span>
                             )}
 
                             <button
@@ -2831,26 +3092,189 @@ export default function AmproAdminPage() {
                                 savingPaid ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                               }`}
                             >
-                              {savingPaid ? 'Verwerken…' : ((memberDetailApp as any)?.paid ? 'Markeer onbetaald' : 'Markeer betaald')}
+                              {savingPaid ? 'Processing…' : ((memberDetailApp as any)?.paid ? 'Mark as unpaid' : 'Mark as paid')}
                             </button>
                           </div>
                         </div>
 
                         <div className="rounded-3xl border border-gray-200 bg-white p-4">
-                          <div className="text-sm font-semibold text-gray-900">User gegevens</div>
-                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {formattedSnapshotRows.map((r) => (
-                              <div key={r.label} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                <div className="text-xs font-semibold text-gray-600">{r.label}</div>
-                                <div className="mt-1 text-sm font-semibold text-gray-900 wrap-break-word">{r.value || '-'}</div>
-                              </div>
-                            ))}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-gray-900">User details</div>
+                            <div className="flex items-center gap-2">
+                              {editingMemberSnapshot ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingMemberSnapshot(false)}
+                                    disabled={savingMemberSnapshot}
+                                    className="h-9 rounded-3xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={saveMemberSnapshot}
+                                    disabled={savingMemberSnapshot}
+                                    className={`h-9 rounded-3xl px-3 text-sm font-semibold transition-colors ${
+                                      savingMemberSnapshot ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                                  >
+                                    {savingMemberSnapshot ? 'Saving…' : 'Save'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingMemberSnapshot(true)}
+                                  className="h-9 rounded-3xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </div>
                           </div>
+
+                          {editingMemberSnapshot ? (
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                First name
+                                <input
+                                  value={memberSnapshotDraft.first_name || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, first_name: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Last name
+                                <input
+                                  value={memberSnapshotDraft.last_name || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, last_name: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Birth date
+                                <input
+                                  value={memberSnapshotDraft.birth_date || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, birth_date: e.target.value }))}
+                                  placeholder="YYYY-MM-DD"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Email
+                                <input
+                                  value={memberSnapshotDraft.email || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, email: e.target.value }))}
+                                  inputMode="email"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Phone
+                                <input
+                                  value={memberSnapshotDraft.phone || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, phone: e.target.value }))}
+                                  inputMode="tel"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <div />
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Instagram
+                                <input
+                                  value={memberSnapshotDraft.instagram_username || ''}
+                                  onChange={(e) =>
+                                    setMemberSnapshotDraft((prev) => ({ ...prev, instagram_username: e.target.value }))
+                                  }
+                                  placeholder="e.g. janedoe"
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                T-shirt size
+                                <select
+                                  value={memberSnapshotDraft.tshirt_size || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, tshirt_size: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                >
+                                  <option value="">(select)</option>
+                                  <option value="XS">XS</option>
+                                  <option value="S">S</option>
+                                  <option value="M">M</option>
+                                  <option value="L">L</option>
+                                  <option value="XL">XL</option>
+                                  <option value="XXL">XXL</option>
+                                </select>
+                              </label>
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Street
+                                <input
+                                  value={memberSnapshotDraft.street || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, street: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                House number
+                                <input
+                                  value={memberSnapshotDraft.house_number || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, house_number: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Addition
+                                <input
+                                  value={memberSnapshotDraft.house_number_addition || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, house_number_addition: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <div />
+
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                Postal code
+                                <input
+                                  value={memberSnapshotDraft.postal_code || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, postal_code: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-medium text-gray-700">
+                                City
+                                <input
+                                  value={memberSnapshotDraft.city || ''}
+                                  onChange={(e) => setMemberSnapshotDraft((prev) => ({ ...prev, city: e.target.value }))}
+                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                />
+                              </label>
+
+                              <div className="sm:col-span-2 text-xs text-gray-500">
+                                This edits <span className="font-semibold">snapshot_json</span> on the application (useful for invite applications without filled-in data).
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {formattedSnapshotRows.map((r) => (
+                                <div key={r.label} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                  <div className="text-xs font-semibold text-gray-600">{r.label}</div>
+                                  <div className="mt-1 text-sm font-semibold text-gray-900 wrap-break-word">{r.value || '-'}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="rounded-3xl border border-gray-200 bg-white p-4">
-                          <div className="text-sm font-semibold text-gray-900">Form gegevens</div>
-                          <div className="mt-1 text-sm text-gray-600">{formRow?.name || 'Geen form gekoppeld'}</div>
+                          <div className="text-sm font-semibold text-gray-900">Form details</div>
+                          <div className="mt-1 text-sm text-gray-600">{formRow?.name || 'No form linked'}</div>
 
                           {answerFields.length ? (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2864,7 +3288,7 @@ export default function AmproAdminPage() {
                               ))}
                             </div>
                           ) : (
-                            <div className="mt-3 text-sm text-gray-600">Geen form velden gevonden.</div>
+                            <div className="mt-3 text-sm text-gray-600">No form fields found.</div>
                           )}
                         </div>
                       </div>
@@ -2876,7 +3300,7 @@ export default function AmproAdminPage() {
             <Modal
               isOpen={memberDeleteOpen}
               onClose={() => setMemberDeleteOpen(false)}
-              ariaLabel="Member verwijderen"
+              ariaLabel="Delete member"
               contentStyle={{ maxWidth: 640 }}
             >
               {memberDeleteApp
@@ -2890,15 +3314,15 @@ export default function AmproAdminPage() {
                     return (
                       <div className="space-y-4">
                         <div>
-                          <h2 className="text-xl font-bold text-gray-900">Member verwijderen</h2>
-                          <p className="mt-1 text-sm text-gray-600">Deze actie kan je niet ongedaan maken.</p>
+                          <h2 className="text-xl font-bold text-gray-900">Delete member</h2>
+                          <p className="mt-1 text-sm text-gray-600">This action cannot be undone.</p>
                         </div>
 
                         <p className="text-sm text-gray-700">
-                          Je staat op het punt om de inschrijving te verwijderen voor <span className="font-semibold">{name}</span> ({perfTitle}).
+                          You are about to delete the application for <span className="font-semibold">{name}</span> ({perfTitle}).
                         </p>
                         <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                          <div className="text-sm font-semibold text-gray-900">Typ DELETE om te bevestigen</div>
+                          <div className="text-sm font-semibold text-gray-900">Type DELETE to confirm</div>
                           <input
                             value={memberDeleteConfirm}
                             onChange={(e) => setMemberDeleteConfirm(e.target.value)}
@@ -2913,7 +3337,7 @@ export default function AmproAdminPage() {
                             onClick={deleteMemberApplication}
                             className="h-11 rounded-3xl bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Verwijderen
+                            Delete
                           </button>
                         </div>
                       </div>
@@ -2926,8 +3350,8 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Programma’s</h1>
-                    <p className="mt-1 text-sm text-gray-600">Beheer programma’s (performances & workshops).</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Programs</h1>
+                    <p className="mt-1 text-sm text-gray-600">Manage programs (performances & workshops).</p>
                   </div>
                   <button
                     type="button"
@@ -2935,7 +3359,7 @@ export default function AmproAdminPage() {
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
-                    Nieuw programma
+                    New
                   </button>
                 </div>
 
@@ -2943,14 +3367,14 @@ export default function AmproAdminPage() {
                   <SearchFilterBar
                     value={programmaSearch}
                     onChange={setProgrammaSearch}
-                    placeholder="Zoek programma’s…"
+                    placeholder="Search programs…"
                   />
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-6">
                     <div className="grid gap-2">
                       {filteredProgrammas.map((p) => {
                         const type = String(p?.program_type || '').toLowerCase()
-                        const typeLabel = type === 'workshop' ? 'Workshop' : 'Voorstelling'
+                        const typeLabel = type === 'workshop' ? 'Workshop' : 'Performance'
                         const locationName = p?.location_id ? locationNameById[String(p.location_id)] : ''
 
                         return (
@@ -2971,10 +3395,10 @@ export default function AmproAdminPage() {
                                 {locationName && (p.region || p.performance_dates?.length || p.rehearsal_period_start || p.rehearsal_period_end || p.application_deadline)
                                   ? ' • '
                                   : null}
-                                {p.region ? `Regio: ${p.region}` : null}
+                                {p.region ? `Region: ${p.region}` : null}
                                 {p.region && (p.performance_dates?.length || p.rehearsal_period_start || p.rehearsal_period_end) ? ' • ' : null}
                                 {Array.isArray(p.performance_dates) && p.performance_dates.length
-                                  ? `Data: ${p.performance_dates.map((d: string) => formatDateOnlyFromISODate(d)).join(', ')}`
+                                  ? `Dates: ${p.performance_dates.map((d: string) => formatDateOnlyFromISODate(d)).join(', ')}`
                                   : null}
                                 {Array.isArray(p.performance_dates) && p.performance_dates.length && (p.rehearsal_period_start || p.rehearsal_period_end)
                                   ? ' • '
@@ -2991,34 +3415,34 @@ export default function AmproAdminPage() {
 
                             <div className="flex items-center gap-3 shrink-0">
                               <ActionIcon
-                                title="Groepslink"
+                                title="Group link"
                                 icon={Link2}
                                 variant="muted"
                                 className="hover:text-blue-600"
-                                onClick={() => openInviteManager(String(p.id), String(p.title || 'Programma'))}
-                                aria-label="Groepslink"
+                                onClick={() => openInviteManager(String(p.id), String(p.title || 'Program'))}
+                                aria-label="Group link"
                               />
                               <ActionIcon
-                                title="Bewerk"
+                                title="Edit"
                                 icon={Edit2}
                                 variant="primary"
                                 onClick={() => openEditProgrammaModal(p)}
-                                aria-label="Bewerk"
+                                aria-label="Edit"
                               />
                               <ActionIcon
-                                title="Weergeven"
+                                title="View"
                                 icon={Eye}
                                 variant="muted"
                                 className="hover:text-blue-600"
                                 onClick={() => router.push(`/ampro/programmas/${encodeURIComponent(p.id)}`)}
-                                aria-label="Weergeven"
+                                aria-label="View"
                               />
                               <ActionIcon
-                                title="Verwijderen"
+                                title="Delete"
                                 icon={Trash2}
                                 variant="danger"
                                 onClick={() => deleteProgram(String(p.id))}
-                                aria-label="Verwijderen"
+                                aria-label="Delete"
                               />
                             </div>
                           </div>
@@ -3026,7 +3450,7 @@ export default function AmproAdminPage() {
                       })}
 
                       {filteredProgrammas.length === 0 ? (
-                        <div className="text-sm text-gray-600">Geen programma’s gevonden.</div>
+                        <div className="text-sm text-gray-600">No programs found.</div>
                       ) : null}
                     </div>
                   </div>
@@ -3039,7 +3463,7 @@ export default function AmproAdminPage() {
                 <div className="flex items-start justify-between gap-6">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">Forms</h1>
-                    <p className="mt-1 text-sm text-gray-600">Maak en beheer inschrijfformulieren.</p>
+                    <p className="mt-1 text-sm text-gray-600">Create and manage application forms.</p>
                   </div>
                   <button
                     type="button"
@@ -3053,12 +3477,12 @@ export default function AmproAdminPage() {
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
-                    Nieuwe form
+                    New
                   </button>
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-                  <div className="text-md font-semibold text-gray-900">Gemaakte forms</div>
+                  <div className="text-md font-semibold text-gray-900">Created forms</div>
                   <div className="mt-4 grid gap-2">
                     {forms.map((f) => {
                       const count = Array.isArray((f as any)?.fields_json) ? ((f as any).fields_json as any[]).length : 0
@@ -3073,7 +3497,7 @@ export default function AmproAdminPage() {
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <ActionIcon
-                              title="Bewerk"
+                              title="Edit"
                               icon={Edit2}
                               variant="primary"
                               onClick={() => {
@@ -3096,31 +3520,31 @@ export default function AmproAdminPage() {
                                 setNewFormFields(mapped.length ? mapped : [makeEmptyFieldDraft()])
                                 setFormModalOpen(true)
                               }}
-                              aria-label="Bewerk"
+                              aria-label="Edit"
                             />
                             <ActionIcon
-                              title="Verwijderen"
+                              title="Delete"
                               icon={Trash2}
                               variant="danger"
                               onClick={async () => {
                                 try {
-                                  if (!confirm(`Weet je zeker dat je het formulier "${String(f.name || '')}" wilt verwijderen?`)) return
+                                  if (!confirm(`Are you sure you want to delete the form "${String(f.name || '')}"?`)) return
                                   const { error } = await supabase.from('ampro_forms').delete().eq('id', f.id)
                                   if (error) throw error
                                   await refresh()
-                                  showSuccess('Form verwijderd')
+                                  showSuccess('Form deleted')
                                 } catch (e: any) {
-                                  showError(e?.message || 'Kon form niet verwijderen')
+                                  showError(e?.message || 'Failed to delete form')
                                 }
                               }}
-                              aria-label="Verwijderen"
+                              aria-label="Delete"
                             />
                           </div>
                         </div>
                       )
                     })}
 
-                    {forms.length === 0 ? <div className="text-sm text-gray-600">Nog geen forms.</div> : null}
+                    {forms.length === 0 ? <div className="text-sm text-gray-600">No forms yet.</div> : null}
                   </div>
                 </div>
               </>
@@ -3131,15 +3555,15 @@ export default function AmproAdminPage() {
                 <div className="flex items-start justify-between gap-6">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">Notes</h1>
-                    <p className="mt-1 text-sm text-gray-600">Toon informatie aan ingeschreven (accepted) users.</p>
+                    <p className="mt-1 text-sm text-gray-600">Show information to accepted users.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setNoteModalOpen(true)}
+                    onClick={openCreateNoteModal}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
-                    Nieuwe note
+                    New
                   </button>
                 </div>
 
@@ -3158,7 +3582,7 @@ export default function AmproAdminPage() {
                       return (
                         <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
                           <div className="text-sm font-semibold text-gray-900">{p.title}</div>
-                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Volgorde opslaan…</div> : null}
+                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Saving order…</div> : null}
                           <div className="mt-4 grid gap-2">
                             <DndContext
                               sensors={sensors}
@@ -3169,8 +3593,28 @@ export default function AmproAdminPage() {
                                 {notes.map((u: any) => (
                                   <SortableCardItem key={u.id} id={String(u.id)}>
                                     <div className="rounded-3xl border border-gray-200 p-4">
-                                      <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
-                                      <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <ActionIcon
+                                            title="Edit"
+                                            icon={Edit2}
+                                            variant="primary"
+                                            onClick={() => openEditNoteModal(u)}
+                                            aria-label="Edit"
+                                          />
+                                          <ActionIcon
+                                            title="Delete"
+                                            icon={Trash2}
+                                            variant="danger"
+                                            onClick={() => deleteNote(u)}
+                                            aria-label="Delete"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
                                     </div>
                                   </SortableCardItem>
                                 ))}
@@ -3183,20 +3627,34 @@ export default function AmproAdminPage() {
 
                   {unknownProgramUpdates.length ? (
                     <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                      <div className="text-sm font-semibold text-gray-900">Onbekend programma</div>
+                      <div className="text-sm font-semibold text-gray-900">Unknown program</div>
                       <div className="mt-4 grid gap-2">
                         {unknownProgramUpdates.map((u: any) => (
                           <div key={u.id} className="rounded-3xl border border-gray-200 p-4">
-                            <div className="text-xs text-gray-500">{String(u.performance_id || '')}</div>
-                            <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
-                            <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-xs text-gray-500">{String(u.performance_id || '')}</div>
+                                <div className="mt-1 text-md font-semibold text-gray-900">{u.title}</div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <ActionIcon
+                                  title="Edit"
+                                  icon={Edit2}
+                                  variant="primary"
+                                  onClick={() => openEditNoteModal(u)}
+                                  aria-label="Edit"
+                                />
+                                <ActionIcon title="Delete" icon={Trash2} variant="danger" onClick={() => deleteNote(u)} aria-label="Delete" />
+                              </div>
+                            </div>
+                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
                           </div>
                         ))}
                       </div>
                     </div>
                   ) : null}
 
-                  {updates.length === 0 ? <div className="text-sm text-gray-600">Nog geen notes.</div> : null}
+                  {updates.length === 0 ? <div className="text-sm text-gray-600">No notes yet.</div> : null}
                 </div>
               </>
             ) : null}
@@ -3205,8 +3663,8 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Correcties</h1>
-                    <p className="mt-1 text-sm text-gray-600">Voeg correcties toe per programma (met datum) en kies zichtbaarheid.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Corrections</h1>
+                    <p className="mt-1 text-sm text-gray-600">Add corrections per program (with date) and choose visibility.</p>
                   </div>
                   <button
                     type="button"
@@ -3214,7 +3672,7 @@ export default function AmproAdminPage() {
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
-                    Nieuwe correctie
+                    New
                   </button>
                 </div>
 
@@ -3236,7 +3694,7 @@ export default function AmproAdminPage() {
                       return (
                         <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-6">
                           <div className="text-sm font-semibold text-gray-900">{p.title}</div>
-                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Volgorde opslaan…</div> : null}
+                          {savingOrder ? <div className="mt-1 text-xs text-gray-500">Saving order…</div> : null}
                           <div className="mt-4 grid gap-2">
                             <DndContext
                               sensors={sensors}
@@ -3249,7 +3707,7 @@ export default function AmproAdminPage() {
                                     <div className="rounded-3xl border border-gray-200 p-4">
                                       <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div className="min-w-0">
-                                          <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                                          <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correction')}</div>
                                           <div className="mt-0.5 text-xs text-gray-500">
                                             {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
                                           </div>
@@ -3258,31 +3716,31 @@ export default function AmproAdminPage() {
                                               c.visible_to_accepted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                                             }`}
                                           >
-                                            {c.visible_to_accepted ? 'Zichtbaar' : 'Verborgen'}
+                                            {c.visible_to_accepted ? 'Visible' : 'Hidden'}
                                           </div>
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0">
                                           <ActionIcon
-                                            title={c.visible_to_accepted ? 'Verberg voor users' : 'Maak zichtbaar voor users'}
+                                            title={c.visible_to_accepted ? 'Hide from users' : 'Make visible to users'}
                                             icon={Eye}
                                             variant={c.visible_to_accepted ? 'danger' : 'primary'}
                                             onClick={() => toggleCorrectionVisibility(c)}
-                                            aria-label={c.visible_to_accepted ? 'Verberg' : 'Toon'}
+                                            aria-label={c.visible_to_accepted ? 'Hide' : 'Show'}
                                           />
                                           <ActionIcon
-                                            title="Bewerk"
+                                            title="Edit"
                                             icon={Edit2}
                                             variant="primary"
                                             onClick={() => openEditCorrectionModal(c)}
-                                            aria-label="Bewerk"
+                                            aria-label="Edit"
                                           />
                                           <ActionIcon
-                                            title="Verwijderen"
+                                            title="Delete"
                                             icon={Trash2}
                                             variant="danger"
                                             onClick={() => deleteCorrection(c)}
-                                            aria-label="Verwijderen"
+                                            aria-label="Delete"
                                           />
                                         </div>
                                       </div>
@@ -3299,12 +3757,12 @@ export default function AmproAdminPage() {
 
                   {unknownProgramCorrections.length ? (
                     <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                      <div className="text-sm font-semibold text-gray-900">Onbekend programma</div>
+                      <div className="text-sm font-semibold text-gray-900">Unknown program</div>
                       <div className="mt-4 grid gap-2">
                         {unknownProgramCorrections.map((c: any) => (
                           <div key={c.id} className="rounded-3xl border border-gray-200 p-4">
                             <div className="text-xs text-gray-500">{String(c.performance_id || '')}</div>
-                            <div className="mt-1 text-sm font-semibold text-gray-900">{String(c.title || 'Correctie')}</div>
+                            <div className="mt-1 text-sm font-semibold text-gray-900">{String(c.title || 'Correction')}</div>
                             <div className="mt-0.5 text-xs text-gray-500">
                               {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
                             </div>
@@ -3315,21 +3773,21 @@ export default function AmproAdminPage() {
                     </div>
                   ) : null}
 
-                  {corrections.length === 0 ? <div className="text-sm text-gray-600">Nog geen correcties.</div> : null}
+                  {corrections.length === 0 ? <div className="text-sm text-gray-600">No corrections yet.</div> : null}
                 </div>
               </>
             ) : null}
 
             {active === 'availability' ? (
               <>
-                <h1 className="text-2xl font-bold text-gray-900">Beschikbaarheid</h1>
-                <p className="mt-1 text-sm text-gray-600">Vraag beschikbaarheid op per programma en bekijk antwoorden.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Availability</h1>
+                <p className="mt-1 text-sm text-gray-600">Request availability per program and review responses.</p>
 
                 <div className="mt-6 grid gap-4">
                   <div className="rounded-2xl border border-gray-200 bg-white p-6">
                     <div className="grid gap-3">
                       <label className="grid gap-1 text-sm font-medium text-gray-700">
-                        Programma
+                        Program
                         <select
                           value={availabilityPerformanceId}
                           onChange={(e) => setAvailabilityPerformanceId(e.target.value)}
@@ -3350,7 +3808,7 @@ export default function AmproAdminPage() {
                           onChange={(e) => setAvailabilityVisible(e.target.checked)}
                           className="h-4 w-4 rounded border-gray-300"
                         />
-                        Zichtbaar voor users
+                        Visible to users
                       </label>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -3361,33 +3819,33 @@ export default function AmproAdminPage() {
                             onChange={(e) => setAvailabilityLocked(e.target.checked)}
                             className="h-4 w-4 rounded border-gray-300"
                           />
-                          Vergrendel (user kan niet meer aanpassen)
+                          Lock (user can no longer edit)
                         </label>
 
                         <label className="grid gap-1 text-sm font-medium text-gray-700">
-                          Vergrendel na datum (optioneel)
+                          Lock after date (optional)
                           <input
                             value={availabilityLockAt}
                             onChange={(e) => setAvailabilityLockAt(e.target.value)}
-                            placeholder="dd/mm/jjjj"
+                            placeholder="dd/mm/yyyy"
                             className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                           />
                         </label>
                       </div>
 
                       <label className="grid gap-1 text-sm font-medium text-gray-700">
-                        Data (1 per lijn of komma)
+                        Dates (one per line or comma-separated)
                         <textarea
                           value={availabilityDatesText}
                           onChange={(e) => setAvailabilityDatesText(e.target.value)}
-                          placeholder="dd/mm/jjjj"
+                          placeholder="dd/mm/yyyy"
                           className="min-h-24 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
                         />
                       </label>
 
                       <div className="rounded-3xl border border-gray-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-gray-900">Locatie per datum (optioneel)</div>
-                        <div className="mt-1 text-xs text-gray-600">Kies een locatie uit je aangemaakte locaties. Laat leeg als het niet van toepassing is.</div>
+                        <div className="text-sm font-semibold text-gray-900">Location per date (optional)</div>
+                        <div className="mt-1 text-xs text-gray-600">Choose a location from your created locations. Leave empty if not applicable.</div>
 
                         {parsedAvailabilityDays.error ? (
                           <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -3414,7 +3872,7 @@ export default function AmproAdminPage() {
                                   }}
                                   className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
                                 >
-                                  <option value="">— geen locatie —</option>
+                                  <option value="">— no location —</option>
                                   {locations.map((l: any) => (
                                     <option key={String(l.id)} value={String(l.id)}>
                                       {String(l.name || l.id)}
@@ -3426,7 +3884,7 @@ export default function AmproAdminPage() {
                           })}
 
                           {parsedAvailabilityDays.days.length === 0 && !parsedAvailabilityDays.error ? (
-                            <div className="text-sm text-gray-600">Voeg eerst minstens 1 datum toe.</div>
+                            <div className="text-sm text-gray-600">Add at least 1 date first.</div>
                           ) : null}
                         </div>
                       </div>
@@ -3447,7 +3905,7 @@ export default function AmproAdminPage() {
                                     }}
                                     className="text-sm font-medium text-gray-600 hover:text-gray-900"
                                   >
-                                    {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
+                                    {allSelected ? 'Deselect all' : 'Select all'}
                                   </button>
                                 )
                               })()
@@ -3480,7 +3938,7 @@ export default function AmproAdminPage() {
                             )
                           })}
                           {acceptedUserIdsForSelectedPerformance.length === 0 ? (
-                            <div className="text-sm text-gray-600">Nog geen accepted users in roster voor dit programma.</div>
+                            <div className="text-sm text-gray-600">No accepted users in roster for this program yet.</div>
                           ) : null}
                         </div>
                       </div>
@@ -3494,14 +3952,14 @@ export default function AmproAdminPage() {
                             savingAvailability ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
                         >
-                          {savingAvailability ? 'Opslaan…' : 'Opslaan'}
+                          {savingAvailability ? 'Saving…' : 'Save'}
                         </button>
                       </div>
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                    <div className="text-sm font-semibold text-gray-900">Overzicht</div>
+                    <div className="text-sm font-semibold text-gray-900">Overview</div>
                     <div className="mt-4 grid gap-3">
                       {availabilityRequestId ? (
                         availabilityOverview.map((d) => {
@@ -3515,11 +3973,11 @@ export default function AmproAdminPage() {
                                   <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
                                   {d.location_id ? (
                                     <div className="mt-0.5 text-xs text-gray-600">
-                                      Locatie: <span className="font-semibold text-gray-900">{locationNameById[String(d.location_id)] || String(d.location_id)}</span>
+                                      Location: <span className="font-semibold text-gray-900">{locationNameById[String(d.location_id)] || String(d.location_id)}</span>
                                     </div>
                                   ) : null}
                                   <div className="mt-0.5 text-xs text-gray-600">
-                                    Beschikbaar: <span className="font-semibold text-gray-900">{availableCount}</span>
+                                    Available: <span className="font-semibold text-gray-900">{availableCount}</span>
                                     {total ? ` / ${total}` : ''}
                                   </div>
                                 </div>
@@ -3540,14 +3998,14 @@ export default function AmproAdminPage() {
                                   )
                                 })}
                                 {d.rows.length === 0 ? (
-                                  <div className="text-sm text-gray-600">Geen users gekoppeld aan deze datum.</div>
+                                  <div className="text-sm text-gray-600">No users linked to this date.</div>
                                 ) : null}
                               </div>
                             </div>
                           )
                         })
                       ) : (
-                        <div className="text-sm text-gray-600">Nog geen beschikbaarheidsvraag ingesteld.</div>
+                        <div className="text-sm text-gray-600">No availability request configured yet.</div>
                       )}
                     </div>
                   </div>
@@ -3559,8 +4017,8 @@ export default function AmproAdminPage() {
               <>
                 <div className="flex items-start justify-between gap-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Locaties</h1>
-                    <p className="mt-1 text-sm text-gray-600">Beheer locaties en koppel ze aan programma’s.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Locations</h1>
+                    <p className="mt-1 text-sm text-gray-600">Manage locations and link them to programs.</p>
                   </div>
                   <button
                     type="button"
@@ -3568,12 +4026,12 @@ export default function AmproAdminPage() {
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
-                    Nieuwe locatie
+                    New
                   </button>
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-                  <div className="text-sm font-semibold text-gray-900">Alle locaties</div>
+                  <div className="text-sm font-semibold text-gray-900">All locations</div>
                   <div className="mt-4 grid gap-2">
                     {locations.map((l) => (
                       <div key={l.id} className="flex items-start justify-between gap-4 rounded-3xl border border-gray-200 px-4 py-3">
@@ -3581,19 +4039,27 @@ export default function AmproAdminPage() {
                           <div className="text-sm font-semibold text-gray-900">{l.name}</div>
                           {l.address ? <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{l.address}</div> : null}
                         </div>
-                        <div className="shrink-0">
+                        <div className="shrink-0 flex items-center gap-2">
                           <ActionIcon
-                            title="Bewerk"
+                            title="Edit"
                             icon={Edit2}
                             variant="primary"
                             onClick={() => openEditLocationModal(l)}
-                            aria-label="Bewerk"
+                            aria-label="Edit"
+                          />
+                          <ActionIcon
+                            title="Delete"
+                            icon={Trash2}
+                            variant="danger"
+                            disabled={Boolean(deletingLocationId) && String(deletingLocationId) === String(l.id)}
+                            onClick={() => deleteLocation(l)}
+                            aria-label="Delete"
                           />
                         </div>
                       </div>
                     ))}
 
-                    {locations.length === 0 ? <div className="text-sm text-gray-600">Nog geen locaties.</div> : null}
+                    {locations.length === 0 ? <div className="text-sm text-gray-600">No locations yet.</div> : null}
                   </div>
                 </div>
               </>
@@ -3601,13 +4067,13 @@ export default function AmproAdminPage() {
 
             {active === 'applications' ? (
               <>
-                <h1 className="text-2xl font-bold text-gray-900">Applicaties</h1>
-                <p className="mt-1 text-sm text-gray-600">Accepteer of wijs inschrijvingen af.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
+                <p className="mt-1 text-sm text-gray-600">Accept or reject applications.</p>
 
                 <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
                   <div className="grid gap-2">
                     {(() => {
-                      if (!applications || applications.length === 0) return <div className="text-sm text-gray-600">Nog geen inschrijvingen.</div>
+                      if (!applications || applications.length === 0) return <div className="text-sm text-gray-600">No applications yet.</div>
 
                       const appsByProgram: Record<string, any[]> = {}
                       for (const a of applications) {
@@ -3626,7 +4092,7 @@ export default function AmproAdminPage() {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="text-sm font-semibold text-gray-900">{title}</div>
-                                <div className="text-xs text-gray-600">{group.length} inschrijving(en)</div>
+                                <div className="text-xs text-gray-600">{group.length} application(s)</div>
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
@@ -3652,7 +4118,7 @@ export default function AmproAdminPage() {
                                         hasChanges ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-600'
                                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                                     >
-                                      {saving ? 'Opslaan…' : 'Opslaan'}
+                                      {saving ? 'Saving…' : 'Save'}
                                     </button>
                                   )
                                 })()}
@@ -3671,17 +4137,17 @@ export default function AmproAdminPage() {
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                           <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
-                                          <div className="text-xs text-gray-600">Programma: {title}</div>
+                                          <div className="text-xs text-gray-600">Program: {title}</div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <div className="text-xs font-semibold text-gray-700">{String(stagedStatuses[String(a.id)] ?? a.status)}</div>
                                           <ActionIcon
-                                            title="Bekijk gegevens"
+                                            title="View details"
                                             icon={Eye}
                                             variant="muted"
                                             className="hover:text-blue-600"
                                             onClick={() => openMemberDetail(a)}
-                                            aria-label="Bekijk gegevens"
+                                            aria-label="View details"
                                           />
                                         </div>
                                       </div>
@@ -3709,7 +4175,7 @@ export default function AmproAdminPage() {
                                                     : 'border border-gray-200 bg-white text-gray-900'
                                                 }`}
                                               >
-                                                Twijfel
+                                                Maybe
                                               </button>
                                               <button
                                                 onClick={() => stageStatus(a.id, 'rejected')}
@@ -3742,14 +4208,14 @@ export default function AmproAdminPage() {
             {active === 'members' ? (
               <>
                 <h1 className="text-2xl font-bold text-gray-900">Members</h1>
-                <p className="mt-1 text-sm text-gray-600">Overzicht van alle inschrijvingen per voorstelling.</p>
+                <p className="mt-1 text-sm text-gray-600">Overview of all applications per performance.</p>
 
                 <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
                   <div className="mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Voorstelling</div>
+                      <div className="text-xs text-gray-600 mb-1">Performance</div>
                       <Select value={memberFilterPerformanceId} onChange={(e) => setMemberFilterPerformanceId(e.target.value)}>
-                        <option value="">Alle voorstellingen</option>
+                        <option value="">All performances</option>
                         {performances.map((p) => (
                           <option key={p.id} value={p.id}>{String(p.title || p.id)}</option>
                         ))}
@@ -3759,7 +4225,7 @@ export default function AmproAdminPage() {
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Status</div>
                       <Select value={memberFilterStatus} onChange={(e) => setMemberFilterStatus(e.target.value as any)}>
-                        <option value="all">Alle statussen</option>
+                        <option value="all">All statuses</option>
                         <option value="pending">Pending</option>
                         <option value="accepted">Accepted</option>
                         <option value="rejected">Rejected</option>
@@ -3768,11 +4234,11 @@ export default function AmproAdminPage() {
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Betaalstatus</div>
+                      <div className="text-xs text-gray-600 mb-1">Payment status</div>
                       <Select value={memberFilterPaid} onChange={(e) => setMemberFilterPaid(e.target.value as any)}>
-                        <option value="all">Alle</option>
-                        <option value="paid">Betaald</option>
-                        <option value="unpaid">Onbetaald</option>
+                        <option value="all">All</option>
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
                       </Select>
                     </div>
 
@@ -3796,56 +4262,58 @@ export default function AmproAdminPage() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="text-left text-xs font-semibold text-gray-600">
-                          <th className="py-2 pr-4">Danser</th>
-                          <th className="py-2 pr-4">Voorstelling</th>
-                          <th className="py-2 pr-4">Status</th>
-                          <th className="py-2 pr-4">Betaalstatus</th>
-                          <th className="py-2 pr-4"></th>
+                          <th className="py-2 pr-4">Dancer</th>
+                          <th className="py-2 pr-4">Applications</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {filteredMembers.map((a) => {
-                          const userId = String(a.user_id)
-                          const profile = profilesByUserId[userId]
-                          const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
-                          const perfTitle = performanceTitleById[String(a.performance_id)] || String(a.performance_id)
-
-                          return (
-                            <tr key={a.id} className="text-gray-800">
-                              <td className="py-3 pr-4 font-semibold text-gray-900">{name}</td>
-                              <td className="py-3 pr-4">{perfTitle}</td>
-                              <td className="py-3 pr-4">{String(a.status)}</td>
-                              <td className="py-3 pr-4">
-                                {a.paid ? (
-                                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Betaald</span>
-                                ) : (
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Onbetaald</span>
-                                )}
-                              </td>
-                              <td className="py-3 pr-4">
-                                <div className="flex items-center justify-end gap-2">
-                                  <ActionIcon
-                                    icon={Eye}
-                                    variant="muted"
-                                    className="hover:text-blue-600"
-                                    title="Bekijk gegevens"
-                                    onClick={() => openMemberDetail(a)}
-                                  />
-                                  <ActionIcon
-                                    icon={Trash2}
-                                    variant="danger"
-                                    title="Verwijderen"
-                                    onClick={() => openMemberDelete(a)}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                        {filteredMembers.length === 0 ? (
+                        {groupedMembers.map((g) => (
+                          <tr key={g.userId} className="text-gray-800 align-top">
+                            <td className="py-3 pr-4 font-semibold text-gray-900 whitespace-nowrap">{g.name}</td>
+                            <td className="py-3 pr-4">
+                              <div className="grid gap-2">
+                                {g.rows
+                                  .slice()
+                                  .sort((a: any, b: any) => String(a.performance_id || '').localeCompare(String(b.performance_id || '')))
+                                  .map((a: any) => {
+                                    const perfTitle = performanceTitleById[String(a.performance_id)] || String(a.performance_id)
+                                    const status = String(a.status || '')
+                                    const paid = Boolean(a.paid)
+                                    return (
+                                      <div key={String(a.id)} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-gray-900 truncate">{perfTitle}</div>
+                                          <div className="mt-0.5 text-xs text-gray-600">
+                                            Status: <span className="font-semibold text-gray-800">{status}</span>
+                                            {' • '}
+                                            {paid ? (
+                                              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">Paid</span>
+                                            ) : (
+                                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Unpaid</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="shrink-0 flex items-center gap-2">
+                                          <ActionIcon
+                                            icon={Eye}
+                                            variant="muted"
+                                            className="hover:text-blue-600"
+                                            title="View details"
+                                            onClick={() => openMemberDetail(a)}
+                                          />
+                                          <ActionIcon icon={Trash2} variant="danger" title="Delete" onClick={() => openMemberDelete(a)} />
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {groupedMembers.length === 0 ? (
                           <tr>
-                            <td className="py-4 text-gray-600" colSpan={5}>
-                              Nog geen members.
+                            <td className="py-4 text-gray-600" colSpan={2}>
+                              No members yet.
                             </td>
                           </tr>
                         ) : null}

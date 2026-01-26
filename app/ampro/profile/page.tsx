@@ -17,6 +17,8 @@ type Profile = {
   house_number_addition: string | null
   postal_code: string | null
   city: string | null
+  instagram_username: string | null
+  tshirt_size: string | null
 }
 
 export default function AmproProfilePage() {
@@ -45,6 +47,8 @@ export default function AmproProfilePage() {
     house_number_addition: null,
     postal_code: null,
     city: null,
+    instagram_username: null,
+    tshirt_size: null,
   })
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export default function AmproProfilePage() {
 
         const resp = await supabase
           .from('ampro_dancer_profiles')
-          .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city')
+          .select('first_name,last_name,phone,birth_date,street,house_number,house_number_addition,postal_code,city,instagram_username,tshirt_size')
           .eq('user_id', user.id)
           .maybeSingle()
 
@@ -94,10 +98,12 @@ export default function AmproProfilePage() {
             house_number_addition: (resp.data as any)?.house_number_addition ?? null,
             postal_code: (resp.data as any)?.postal_code ?? null,
             city: (resp.data as any)?.city ?? null,
+            instagram_username: (resp.data as any)?.instagram_username ?? null,
+            tshirt_size: (resp.data as any)?.tshirt_size ?? null,
           })
         }
       } catch (e: any) {
-        if (!cancelled) showError(e?.message || 'Kon profiel niet laden')
+        if (!cancelled) showError(e?.message || 'Failed to load profile')
       } finally {
         if (!cancelled) setChecking(false)
       }
@@ -114,7 +120,7 @@ export default function AmproProfilePage() {
 
       const { data } = await supabase.auth.getSession()
       const user = data?.session?.user
-      if (!user) throw new Error('Je bent niet ingelogd')
+      if (!user) throw new Error('You are not logged in')
 
       const payload = {
         user_id: user.id,
@@ -127,10 +133,12 @@ export default function AmproProfilePage() {
         house_number_addition: profile.house_number_addition || null,
         postal_code: profile.postal_code || null,
         city: profile.city || null,
+        instagram_username: profile.instagram_username ? profile.instagram_username.replace(/^@+/, '').trim() : null,
+        tshirt_size: profile.tshirt_size || null,
       }
 
       if (!isAmproProfileComplete(payload)) {
-        throw new Error('Vul alle verplichte velden in: voornaam, achternaam, geboortedatum en adresgegevens')
+        throw new Error('Please fill in all required fields: first name, last name, date of birth, and address details')
       }
 
       const { error } = await supabase
@@ -139,13 +147,69 @@ export default function AmproProfilePage() {
 
       if (error) throw error
 
-      showSuccess('Profiel opgeslagen')
+      // Best-effort: if the user was added via invite link, their application snapshot may be empty.
+      // Fill missing snapshot fields from the (now complete) profile without overwriting existing values.
+      try {
+        const snapshot = {
+          first_name: payload.first_name,
+          last_name: payload.last_name,
+          birth_date: payload.birth_date,
+          email: user.email ?? null,
+          phone: payload.phone,
+          street: payload.street,
+          house_number: payload.house_number,
+          house_number_addition: payload.house_number_addition,
+          postal_code: payload.postal_code,
+          city: payload.city,
+          instagram_username: payload.instagram_username,
+          tshirt_size: payload.tshirt_size,
+        }
+
+        const appsResp = await supabase
+          .from('ampro_applications')
+          .select('id,snapshot_json')
+          .eq('user_id', user.id)
+          .limit(200)
+
+        if (!appsResp.error) {
+          const updates: Array<{ id: string; snapshot_json: any }> = []
+          for (const row of (appsResp.data as any[]) || []) {
+            const id = String((row as any)?.id || '')
+            if (!id) continue
+
+            const current = (row as any)?.snapshot_json
+            const base = current && typeof current === 'object' && !Array.isArray(current) ? { ...current } : {}
+
+            let changed = false
+            for (const [key, value] of Object.entries(snapshot)) {
+              const existing = (base as any)[key]
+              const hasExisting = typeof existing === 'string' ? existing.trim().length > 0 : existing != null
+              const incoming = typeof value === 'string' ? value.trim() : value
+              if (!hasExisting && incoming != null && String(incoming).trim().length > 0) {
+                ;(base as any)[key] = incoming
+                changed = true
+              }
+            }
+
+            if (changed) updates.push({ id, snapshot_json: base })
+          }
+
+          for (const u of updates) {
+            // Best-effort: don't block profile save if this fails.
+            await supabase.from('ampro_applications').update({ snapshot_json: u.snapshot_json }).eq('id', u.id)
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to backfill application snapshots after profile save', e)
+      }
+
+      showSuccess('Profile saved')
 
       if (nextPath) {
         router.replace(nextPath)
       }
     } catch (e: any) {
-      showError(e?.message || 'Opslaan mislukt')
+      showError(e?.message || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -155,14 +219,14 @@ export default function AmproProfilePage() {
     try {
       setUpdatingEmail(true)
       const nextEmail = newEmail.trim()
-      if (!nextEmail) throw new Error('Vul een geldig e-mailadres in')
+      if (!nextEmail) throw new Error('Enter a valid email address')
 
       const { error } = await supabase.auth.updateUser({ email: nextEmail })
       if (error) throw error
 
-      showSuccess('E-mailadres update aangevraagd. Check je inbox om te bevestigen.')
+      showSuccess('Email update requested. Check your inbox to confirm.')
     } catch (e: any) {
-      showError(e?.message || 'E-mailadres wijzigen mislukt')
+      showError(e?.message || 'Failed to update email')
     } finally {
       setUpdatingEmail(false)
     }
@@ -171,17 +235,17 @@ export default function AmproProfilePage() {
   async function updatePassword() {
     try {
       setUpdatingPassword(true)
-      if (!newPassword) throw new Error('Vul een nieuw wachtwoord in')
-      if (newPassword !== confirmPassword) throw new Error('Wachtwoorden komen niet overeen')
+      if (!newPassword) throw new Error('Enter a new password')
+      if (newPassword !== confirmPassword) throw new Error('Passwords do not match')
 
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
 
       setNewPassword('')
       setConfirmPassword('')
-      showSuccess('Wachtwoord bijgewerkt')
+      showSuccess('Password updated')
     } catch (e: any) {
-      showError(e?.message || 'Wachtwoord wijzigen mislukt')
+      showError(e?.message || 'Failed to update password')
     } finally {
       setUpdatingPassword(false)
     }
@@ -189,7 +253,7 @@ export default function AmproProfilePage() {
 
   async function deleteAccount() {
     try {
-      if (!userId) throw new Error('Je bent niet ingelogd')
+      if (!userId) throw new Error('You are not logged in')
       setDeleting(true)
 
       const res = await fetch('/api/account/delete', {
@@ -199,20 +263,20 @@ export default function AmproProfilePage() {
       })
 
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || 'Account verwijderen mislukt')
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete account')
 
       await supabase.auth.signOut().catch(() => {})
       router.replace('/ampro')
 
       if (data?.warning) {
-        showSuccess('Account verwijderd. Let op: ' + data.warning)
+        showSuccess('Account deleted. Note: ' + data.warning)
       } else if (data?.info) {
-        showSuccess('Account verwijderd. ' + data.info)
+        showSuccess('Account deleted. ' + data.info)
       } else {
-        showSuccess('Account verwijderd')
+        showSuccess('Account deleted')
       }
     } catch (e: any) {
-      showError(e?.message || 'Account verwijderen mislukt')
+      showError(e?.message || 'Failed to delete account')
     } finally {
       setDeleting(false)
       setShowDeleteModal(false)
@@ -232,7 +296,7 @@ export default function AmproProfilePage() {
     <div className="min-h-screen bg-gray-50">
       <ContentContainer className="py-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          <h1 className="text-2xl font-bold text-gray-900">Mijn Profiel</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
           <p className="mt-1 text-sm text-gray-600">{email}</p>
 
           <div className="mt-4">
@@ -240,20 +304,20 @@ export default function AmproProfilePage() {
               onClick={() => router.push('/ampro/profile/notifications')}
               className="inline-flex h-10 items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-100"
             >
-              Notificatie-instellingen
+              Notification settings
             </button>
           </div>
 
           {nextPath ? (
             <div className="mt-4 text-sm text-gray-700">
-              Vul je profiel volledig in om verder te gaan.
+              Please complete your profile to continue.
             </div>
           ) : null}
 
           <div className="mt-8 grid gap-4">
             <div className="grid gap-1 text-sm font-medium text-gray-700">
               <span>
-                Voornaam {requiredMark}
+                First name {requiredMark}
               </span>
               <input
                 value={profile.first_name || ''}
@@ -265,7 +329,7 @@ export default function AmproProfilePage() {
 
             <div className="grid gap-1 text-sm font-medium text-gray-700">
               <span>
-                Achternaam {requiredMark}
+                Last name {requiredMark}
               </span>
               <input
                 value={profile.last_name || ''}
@@ -276,7 +340,7 @@ export default function AmproProfilePage() {
             </div>
 
             <div className="grid gap-1 text-sm font-medium text-gray-700">
-              Telefoon
+              Phone
               <input
                 value={profile.phone || ''}
                 onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
@@ -285,8 +349,35 @@ export default function AmproProfilePage() {
             </div>
 
             <div className="grid gap-1 text-sm font-medium text-gray-700">
+              Instagram username
+              <input
+                value={profile.instagram_username || ''}
+                onChange={(e) => setProfile((p) => ({ ...p, instagram_username: e.target.value }))}
+                placeholder="@..."
+                className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+              />
+            </div>
+
+            <div className="grid gap-1 text-sm font-medium text-gray-700">
+              T-shirt size
+              <select
+                value={profile.tshirt_size || ''}
+                onChange={(e) => setProfile((p) => ({ ...p, tshirt_size: e.target.value }))}
+                className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+              >
+                <option value="">(select)</option>
+                <option value="XS">XS</option>
+                <option value="S">S</option>
+                <option value="M">M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+                <option value="XXL">XXL</option>
+              </select>
+            </div>
+
+            <div className="grid gap-1 text-sm font-medium text-gray-700">
               <span>
-                Geboortedatum {requiredMark}
+                Date of birth {requiredMark}
               </span>
               <input
                 type="date"
@@ -297,11 +388,11 @@ export default function AmproProfilePage() {
               />
             </div>
 
-            <div className="mt-2 text-sm font-semibold text-gray-900">Adres</div>
+            <div className="mt-4 text-lg font-bold text-gray-900">Address</div>
 
             <div className="grid gap-1 text-sm font-medium text-gray-700">
               <span>
-                Straat {requiredMark}
+                Street {requiredMark}
               </span>
               <input
                 value={profile.street || ''}
@@ -314,7 +405,7 @@ export default function AmproProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-1 text-sm font-medium text-gray-700">
                 <span>
-                  Huisnummer {requiredMark}
+                  House number {requiredMark}
                 </span>
                 <input
                   value={profile.house_number || ''}
@@ -324,7 +415,7 @@ export default function AmproProfilePage() {
                 />
               </div>
               <div className="grid gap-1 text-sm font-medium text-gray-700">
-                Huisnummer toevoeging
+                Addition
                 <input
                   value={profile.house_number_addition || ''}
                   onChange={(e) => setProfile((p) => ({ ...p, house_number_addition: e.target.value }))}
@@ -333,7 +424,7 @@ export default function AmproProfilePage() {
               </div>
               <div className="grid gap-1 text-sm font-medium text-gray-700">
                 <span>
-                  Postcode {requiredMark}
+                  Postal code {requiredMark}
                 </span>
                 <input
                   value={profile.postal_code || ''}
@@ -346,7 +437,7 @@ export default function AmproProfilePage() {
 
             <div className="grid gap-1 text-sm font-medium text-gray-700">
               <span>
-                Gemeente {requiredMark}
+                City {requiredMark}
               </span>
               <input
                 value={profile.city || ''}
@@ -363,7 +454,7 @@ export default function AmproProfilePage() {
                 saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
-              {saving ? 'Opslaan…' : nextPath ? 'Opslaan en verdergaan' : 'Opslaan'}
+              {saving ? 'Saving…' : nextPath ? 'Save and continue' : 'Save'}
             </button>
           </div>
         </div>
@@ -373,16 +464,16 @@ export default function AmproProfilePage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-red-900">Danger Zone</h2>
-              <p className="mt-1 text-sm text-gray-600">Wijzig je accountgegevens of verwijder je account permanent.</p>
+              <p className="mt-1 text-sm text-gray-600">Update your account details or permanently delete your account.</p>
             </div>
           </div>
 
           <div className="mt-6 grid gap-6">
             <div className="rounded-2xl border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-900">E-mailadres wijzigen</div>
+              <div className="text-sm font-semibold text-gray-900">Change email</div>
               <div className="mt-3 grid gap-3">
                 <div className="grid gap-1 text-sm font-medium text-gray-700">
-                  Nieuw e-mailadres
+                  New email address
                   <input
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
@@ -401,17 +492,17 @@ export default function AmproProfilePage() {
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
-                  {updatingEmail ? 'Bijwerken…' : 'E-mailadres bijwerken'}
+                  {updatingEmail ? 'Updating…' : 'Update email'}
                 </button>
-                <div className="text-xs text-gray-600">Je kan een bevestigingsmail ontvangen om de wijziging af te ronden.</div>
+                <div className="text-xs text-gray-600">You may receive a confirmation email to complete the change.</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-900">Wachtwoord wijzigen</div>
+              <div className="text-sm font-semibold text-gray-900">Change password</div>
               <div className="mt-3 grid gap-3">
                 <div className="grid gap-1 text-sm font-medium text-gray-700">
-                  Nieuw wachtwoord
+                  New password
                   <input
                     type="password"
                     value={newPassword}
@@ -421,7 +512,7 @@ export default function AmproProfilePage() {
                   />
                 </div>
                 <div className="grid gap-1 text-sm font-medium text-gray-700">
-                  Bevestig nieuw wachtwoord
+                  Confirm new password
                   <input
                     type="password"
                     value={confirmPassword}
@@ -440,14 +531,14 @@ export default function AmproProfilePage() {
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
-                  {updatingPassword ? 'Bijwerken…' : 'Wachtwoord bijwerken'}
+                  {updatingPassword ? 'Updating…' : 'Update password'}
                 </button>
               </div>
             </div>
 
             <div className="rounded-2xl border border-red-200 p-4">
-              <div className="text-sm font-semibold text-gray-900">Account verwijderen</div>
-              <p className="mt-1 text-sm text-gray-600">Dit verwijdert je account en gekoppelde data permanent. Dit kan niet ongedaan gemaakt worden.</p>
+              <div className="text-sm font-semibold text-gray-900">Delete account</div>
+              <p className="mt-1 text-sm text-gray-600">This permanently deletes your account and related data. This cannot be undone.</p>
               <button
                 type="button"
                 onClick={() => {
@@ -456,7 +547,7 @@ export default function AmproProfilePage() {
                 }}
                 className="mt-4 h-11 rounded-3xl px-4 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
               >
-                Account verwijderen
+                Delete account
               </button>
             </div>
           </div>
@@ -465,8 +556,8 @@ export default function AmproProfilePage() {
         {showDeleteModal ? (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200">
-              <div className="text-xl font-semibold text-gray-900">Account verwijderen</div>
-              <p className="mt-2 text-sm text-gray-600">Type <span className="font-semibold">DELETE</span> om te bevestigen.</p>
+              <div className="text-xl font-semibold text-gray-900">Delete account</div>
+              <p className="mt-2 text-sm text-gray-600">Type <span className="font-semibold">DELETE</span> to confirm.</p>
               <input
                 type="text"
                 value={deleteConfirmText}
@@ -483,7 +574,7 @@ export default function AmproProfilePage() {
                     deleting ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                   }`}
                 >
-                  Annuleren
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -495,7 +586,7 @@ export default function AmproProfilePage() {
                       : 'bg-red-600 text-white hover:bg-red-700'
                   }`}
                 >
-                  {deleting ? 'Verwijderen…' : 'Verwijderen'}
+                  {deleting ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>

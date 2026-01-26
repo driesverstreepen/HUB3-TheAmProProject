@@ -18,7 +18,7 @@ export default function StartPage() {
               <p className="max-w-2xl text-slate-100 mb-20">Van beginners tot professionals. Ontdek studios, boek lessen en beheer alles op één plek.</p>
 
               <Link href="/signup" className="inline-flex items-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-full shadow-xl font-semibold hover:scale-105 transition-transform">
-                Aan de slag
+                The AmProProject
                 <span aria-hidden>→</span>
               </Link>
             </div>

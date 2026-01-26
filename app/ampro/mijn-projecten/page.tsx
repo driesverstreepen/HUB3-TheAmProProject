@@ -25,9 +25,9 @@ type RosterRow = {
 
 function getUserStatusLabel(status: string): string {
   const s = String(status || '').toLowerCase()
-  if (s === 'accepted') return 'Geaccepteerd'
-  if (s === 'rejected') return 'Afgewezen'
-  return 'In behandeling'
+  if (s === 'accepted') return 'Accepted'
+  if (s === 'rejected') return 'Rejected'
+  return 'Under review'
 }
 
 export default function AmproMijnProjectenPage() {
@@ -73,7 +73,7 @@ export default function AmproMijnProjectenPage() {
           setRoster((rosterResp.data as any) || [])
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Kon je projecten niet laden')
+        if (!cancelled) setError(e?.message || 'Failed to load your projects')
       } finally {
         if (!cancelled) setChecking(false)
       }
@@ -138,10 +138,10 @@ export default function AmproMijnProjectenPage() {
     try {
       setCheckoutLoading((s) => ({ ...s, [programId]: true }))
 
-      if (!paymentUrl) throw new Error('Geen betaallink beschikbaar voor dit programma')
+      if (!paymentUrl) throw new Error('No payment link available for this program')
       window.location.href = paymentUrl
     } catch (err: any) {
-      setError(err?.message || 'Betalen mislukt')
+      setError(err?.message || 'Payment failed')
     } finally {
       setCheckoutLoading((s) => ({ ...s, [programId]: false }))
     }
@@ -155,15 +155,15 @@ export default function AmproMijnProjectenPage() {
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mijn Projecten</h1>
-          <p className="mt-1 text-sm text-gray-600">Projecten waarvoor je hebt ingeschreven.</p>
+          <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
+          <p className="mt-1 text-sm text-gray-600">Programs you have applied for.</p>
         </div>
 
         {error ? <div className="mt-6 text-sm text-red-600">{error}</div> : null}
 
         <div className="mt-8 grid gap-4">
           <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
-            <div className="text-md font-bold text-gray-700">Geaccepteerd</div>
+            <div className="text-md font-bold text-gray-700">Accepted</div>
             <div className="mt-4 grid gap-2">
               {acceptedPrograms.map((p) => (
                 <Link
@@ -174,7 +174,7 @@ export default function AmproMijnProjectenPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-gray-700 truncate">{p.title}</div>
-                      {p.role_name ? <div className="mt-1 text-xs text-gray-600">Rol: {p.role_name}</div> : null}
+                      {p.role_name ? <div className="mt-1 text-xs text-gray-600">Role: {p.role_name}</div> : null}
                     </div>
                     <span className="inline-flex items-center text-gray-600 transition-colors group-hover:text-blue-600">
                       <ChevronRight className="h-4 w-4" />
@@ -182,13 +182,13 @@ export default function AmproMijnProjectenPage() {
                   </div>
                 </Link>
               ))}
-              {acceptedPrograms.length === 0 ? <div className="text-sm text-gray-600">Nog niets geaccepteerd.</div> : null}
+              {acceptedPrograms.length === 0 ? <div className="text-sm text-gray-600">Nothing accepted yet.</div> : null}
             </div>
           </div>
           {paymentPrograms.length > 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
-              <div className="text-md font-bold text-gray-700">Betaling</div>
-              <p className="mt-1 text-sm text-gray-600">Betaal je inschrijving voor de volgende programma's.</p>
+              <div className="text-md font-bold text-gray-700">Payment</div>
+              <p className="mt-1 text-sm text-gray-600">Pay your registration fee for the following programs.</p>
 
               <div className="mt-4 grid gap-2">
                 {paymentPrograms.map((p) => (
@@ -206,7 +206,7 @@ export default function AmproMijnProjectenPage() {
                           : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
                     >
-                      {checkoutLoading[p.performance_id] ? 'Doorsturen…' : 'Betaal inschrijving'}
+                      {checkoutLoading[p.performance_id] ? 'Redirecting…' : 'Pay registration'}
                     </button>
                   </div>
                 ))}
@@ -215,8 +215,8 @@ export default function AmproMijnProjectenPage() {
           ) : null}
 
           <div className="rounded-2xl border border-gray-200 bg-white elev-1 p-6">
-            <div className="text-md font-bold text-gray-700">Mijn inschrijvingen</div>
-            <p className="mt-1 text-sm text-gray-600">Status van je open applicaties.</p>
+            <div className="text-md font-bold text-gray-700">My applications</div>
+            <p className="mt-1 text-sm text-gray-600">Status of your open applications.</p>
 
             <div className="mt-4 grid gap-2">
               {applied.map((a) => (
@@ -225,7 +225,7 @@ export default function AmproMijnProjectenPage() {
                   <div className="text-xs font-semibold text-gray-900">{getUserStatusLabel(a.status)}</div>
                 </div>
               ))}
-              {applications.length === 0 ? <div className="text-sm text-gray-600">Nog geen inschrijvingen.</div> : null}
+              {applications.length === 0 ? <div className="text-sm text-gray-600">No applications yet.</div> : null}
             </div>
           </div>
         </div>
