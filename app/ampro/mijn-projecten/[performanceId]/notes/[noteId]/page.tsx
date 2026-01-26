@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import ContentContainer from '@/components/ContentContainer'
+import SafeRichText from '@/components/SafeRichText'
 import { supabase } from '@/lib/supabase'
 import { formatDateOnlyFromISODate } from '@/lib/formatting'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -125,14 +126,9 @@ export default function AmproNoteDetailPage() {
             <ArrowLeft className="h-5 w-5" />
             Back
           </button>
-          <Link href="/ampro/mijn-projecten" className="text-sm text-gray-500 hover:text-gray-700">
-            My projects
-          </Link>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h1 className="text-xl font-bold text-gray-900">Note</h1>
-
           {!hasPaid ? (
             <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
               This note is only visible after payment.
@@ -155,12 +151,12 @@ export default function AmproNoteDetailPage() {
               ) : null}
             </div>
           ) : note ? (
-            <div className="mt-4 space-y-3">
+            <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-base font-semibold text-gray-900">{note.title}</div>
+                <div className="text-xl font-bold text-gray-900">{note.title}</div>
                 <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(note.created_at))}</div>
               </div>
-              <div className="text-sm text-gray-700 whitespace-pre-wrap">{note.body}</div>
+              <SafeRichText value={note.body} className="prose prose-sm max-w-none text-gray-700" />
             </div>
           ) : (
             <div className="mt-4 text-sm text-gray-600">Note not found.</div>

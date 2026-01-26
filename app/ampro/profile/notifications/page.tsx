@@ -192,7 +192,7 @@ export default function AmproNotificationSettingsPage() {
             <button
               onClick={save}
               disabled={saving}
-              className="inline-flex h-11 items-center justify-center rounded-3xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex h-11 items-center justify-center rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>

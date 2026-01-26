@@ -92,6 +92,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status })
     }
 
+    // Ensure free-program invite claims are immediately marked as paid.
+    // This is a safety net in case DB migrations/RPC updates haven't been applied yet.
+    try {
+      const perf = String(performanceId || '').trim()
+      if (perf) {
+        const programResp = await admin.from('ampro_programmas').select('price').eq('id', perf).maybeSingle()
+        const price = Number((programResp as any)?.data?.price)
+        const isFree = !Number.isFinite(price) || price <= 0
+
+        if (isFree) {
+          const appResp = await admin
+            .from('ampro_applications')
+            .select('id,paid,payment_received_at')
+            .eq('performance_id', perf)
+            .eq('user_id', userId)
+            .maybeSingle()
+
+          const existing: any = (appResp as any)?.data || null
+          const alreadyPaid = Boolean(existing?.paid) || Boolean(existing?.payment_received_at)
+          if (!alreadyPaid) {
+            const nowIso = new Date().toISOString()
+            await admin
+              .from('ampro_applications')
+              .update({ paid: true, payment_received_at: nowIso })
+              .eq('performance_id', perf)
+              .eq('user_id', userId)
+          } else if (existing?.paid !== true) {
+            // If a timestamp exists but the boolean is false, normalize it.
+            await admin
+              .from('ampro_applications')
+              .update({ paid: true })
+              .eq('performance_id', perf)
+              .eq('user_id', userId)
+          }
+        }
+      }
+    } catch {
+      // best-effort
+    }
+
     // If profile is incomplete (common for users who just created an account from an invite link),
     // guide them to complete it before continuing.
     let redirect = '/ampro/mijn-projecten'

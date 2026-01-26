@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ContentContainer from '@/components/ContentContainer'
+import SafeRichText from '@/components/SafeRichText'
 import { ArrowLeft, Calendar, MapPin } from 'lucide-react'
-import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
+import { formatCurrency, formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
 import { useNotification } from '@/contexts/NotificationContext'
 
 type Programma = {
@@ -14,6 +15,7 @@ type Programma = {
   description: string | null
   applications_open: boolean
   application_deadline: string | null
+  price?: number | null
   location_id?: string | null
   rehearsal_period_start?: string | null
   rehearsal_period_end?: string | null
@@ -73,7 +75,7 @@ export default function AmproProgrammaDetailPage() {
         const { data, error } = await supabase
           .from('ampro_programmas')
           .select(
-            'id,title,description,applications_open,application_deadline,location_id,rehearsal_period_start,rehearsal_period_end,performance_dates,region,program_type',
+            'id,title,description,applications_open,application_deadline,price,location_id,rehearsal_period_start,rehearsal_period_end,performance_dates,region,program_type',
           )
           .eq('id', programmaId)
           .maybeSingle()
@@ -117,6 +119,12 @@ export default function AmproProgrammaDetailPage() {
 
   const deadlinePassed = isISODatePast(programma?.application_deadline)
   const isClosed = Boolean(programma && (!programma.applications_open || deadlinePassed))
+
+  const priceLabel = useMemo(() => {
+    const v: any = (programma as any)?.price
+    if (typeof v !== 'number' || Number.isNaN(v)) return null
+    return formatCurrency(v, { cents: true })
+  }, [programma])
 
   const performanceDatesLabel = (() => {
     const dates = programma?.performance_dates || []
@@ -219,7 +227,7 @@ export default function AmproProgrammaDetailPage() {
               {programma.description ? (
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
-                  <p className="text-gray-500 leading-relaxed whitespace-pre-wrap">{programma.description}</p>
+                  <SafeRichText value={programma.description} className="prose prose-sm max-w-none text-gray-600" />
                 </div>
               ) : null}
             </div>
@@ -239,6 +247,15 @@ export default function AmproProgrammaDetailPage() {
                     {programma.application_deadline ? `Deadline: ${formatDateOnlyFromISODate(programma.application_deadline)}` : ''}
                   </div>
                 </div>
+
+                {priceLabel ? (
+                  <div className="mb-4 p-4 bg-white border border-gray-200 rounded-3xl">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-900">Price</span>
+                      <span className="text-sm font-bold text-gray-900">{priceLabel}</span>
+                    </div>
+                  </div>
+                ) : null}
 
                 <button
                   type="button"

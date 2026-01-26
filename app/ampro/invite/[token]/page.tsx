@@ -396,7 +396,7 @@ export default function AmproInvitePage({ params }: Props) {
 
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">Program invite</h1>
         <p className="text-center text-gray-600 mb-8">
-          You will be connected to: <span className="font-semibold">{lookup.performance.title}</span>
+          You will be linked to: <span className="font-semibold">{lookup.performance.title}</span>
         </p>
 
         {!lookup.status.ok ? (
@@ -408,7 +408,7 @@ export default function AmproInvitePage({ params }: Props) {
         {success && needsProfile ? (
           <div className="grid gap-4">
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="text-sm font-semibold text-amber-900">Step 2/2: complete profile</div>
+              <div className="text-sm font-semibold text-amber-900">Step 2/2: complete your profile</div>
               <div className="mt-1 text-sm text-amber-900">
                 Fill in your profile completely to complete your registration. This information is used for insurance and to administratively register your participation correctly.
               </div>
@@ -559,7 +559,6 @@ export default function AmproInvitePage({ params }: Props) {
             >
               Create account
             </Link>
-            <p className="text-xs text-gray-500 text-center">After logging in you will be automatically connected.</p>
           </div>
         ) : (
           <div className="grid gap-3">

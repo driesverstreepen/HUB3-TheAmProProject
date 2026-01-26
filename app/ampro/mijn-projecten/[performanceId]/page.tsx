@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Calendar, MapPin, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, ChevronDown, ChevronRight } from 'lucide-react'
 import Select from '@/components/Select'
 import Modal from '@/components/Modal'
+import SafeRichText from '@/components/SafeRichText'
 import { supabase } from '@/lib/supabase'
 import ContentContainer from '@/components/ContentContainer'
 import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
@@ -62,6 +63,24 @@ type AvailabilityDateRow = {
   request_id: string
   day: string
   location_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
+}
+
+function normalizeTimeForInput(v: any): string {
+  if (!v) return ''
+  const s = String(v)
+  if (s.length >= 5 && /^\d{2}:\d{2}/.test(s)) return s.slice(0, 5)
+  return ''
+}
+
+function formatTimeWindow(start: string | null | undefined, end: string | null | undefined): string {
+  const s = normalizeTimeForInput(start)
+  const e = normalizeTimeForInput(end)
+  if (s && e) return `${s}–${e}`
+  if (s) return s
+  if (e) return e
+  return ''
 }
 
 type AvailabilityResponseRow = {
@@ -152,6 +171,9 @@ export default function AmproMijnProjectenDetailPage() {
           return
         }
 
+        const programPriceCents = Number((perfResp.data as any)?.price)
+        const requiresPayment = Number.isFinite(programPriceCents) && programPriceCents > 0
+
         let loc: LocationRow | null = null
         const locationId = (perfResp.data as any)?.location_id ? String((perfResp.data as any).location_id) : ''
         if (locationId) {
@@ -192,12 +214,21 @@ export default function AmproMijnProjectenDetailPage() {
             .eq('user_id', user.id)
             .maybeSingle()
 
-          if (!appResp.error && appResp.data) {
-            setHasPaid(Boolean((appResp.data as any).paid))
-            setPaymentReceivedAt(((appResp.data as any).payment_received_at as string) || null)
+          if (!cancelled) {
+            if (!requiresPayment) {
+              setHasPaid(true)
+              setPaymentReceivedAt(null)
+            } else if (!appResp.error && appResp.data) {
+              setHasPaid(Boolean((appResp.data as any).paid))
+              setPaymentReceivedAt(((appResp.data as any).payment_received_at as string) || null)
+            }
           }
         } catch (e) {
           // swallow; payment status is optional
+          if (!cancelled && !requiresPayment) {
+            setHasPaid(true)
+            setPaymentReceivedAt(null)
+          }
         }
 
         // Stripe integration removed from AmPro detail: admin_payment_url on the program is used.
@@ -310,7 +341,9 @@ export default function AmproMijnProjectenDetailPage() {
 
   const adminPaymentUrl = (programma as any)?.admin_payment_url || null
   const priceCents = (programma as any)?.price
-  const priceLabel = typeof priceCents === 'number' && !Number.isNaN(priceCents)
+  const requiresPayment = typeof priceCents === 'number' && Number.isFinite(priceCents) && priceCents > 0
+  const showPaymentSection = requiresPayment
+  const priceLabel = typeof priceCents === 'number' && Number.isFinite(priceCents)
     ? `${(Number(priceCents) / 100).toFixed(2)} EUR`
     : null
 
@@ -437,7 +470,7 @@ export default function AmproMijnProjectenDetailPage() {
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
-            <div className="lg:col-span-3 h-full">
+            <div className={`${showPaymentSection ? 'lg:col-span-3' : 'lg:col-span-4'} h-full`}>
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 h-full">
                 <h1 className="text-3xl font-bold text-gray-900">{programma.title}</h1>
 
@@ -488,59 +521,61 @@ export default function AmproMijnProjectenDetailPage() {
                 ) : null}
               </div>
             </div>
-            <div className="lg:col-span-1 h-full">
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full flex flex-col justify-between">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Payment</h2>
-                <div className="text-sm text-gray-700 mb-4">
-                  Your registration is only valid after payment. It may take a few days for your payment to be processed.
-                </div>
-                {paymentPending ? (
-                  <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm mb-4">
-                    Payment pending. We process your payment manually.
+            {showPaymentSection ? (
+              <div className="lg:col-span-1 h-full">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 h-full flex flex-col justify-between">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Payment</h2>
+                  <div className="text-sm text-gray-700 mb-4">
+                    Your registration is only valid after payment. It may take a few days for your payment to be processed.
                   </div>
-                ) : null}
+                  {paymentPending ? (
+                    <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm mb-4">
+                      Payment pending. We process your payment manually.
+                    </div>
+                  ) : null}
 
-                {hasPaid ? (
-                  <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm mb-4">
-                    Paid{paymentReceivedAt ? ` on ${formatDateOnlyFromISODate(paymentReceivedAt)}` : ''}.
-                  </div>
-                ) : null}
-
-                <div className="flex items-center gap-3">
-                  <div className="text-sm font-semibold">{priceLabel || 'Price not set'}</div>
                   {hasPaid ? (
-                    <button type="button" disabled className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-green-50 border border-green-200 text-green-800">
-                      Paid
-                    </button>
-                  ) : adminPaymentUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try {
-                          window.open(String(adminPaymentUrl), '_blank', 'noopener')
-                          setPaymentPending(true)
-                        } catch (e) {
-                          window.location.href = String(adminPaymentUrl)
-                        }
-                      }}
-                      className={`h-11 ml-4 rounded-3xl px-6 text-sm font-semibold transition-colors ${
-                        creatingCheckout ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      Pay
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-gray-100 text-gray-400"
-                    >
-                      No payment URL
-                    </button>
-                  )}
+                    <div className="rounded-3xl bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm mb-4">
+                      Paid{paymentReceivedAt ? ` on ${formatDateOnlyFromISODate(paymentReceivedAt)}` : ''}.
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm font-semibold">{priceLabel || 'Price not set'}</div>
+                    {hasPaid ? (
+                      <button type="button" disabled className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-green-50 border border-green-200 text-green-800">
+                        Paid
+                      </button>
+                    ) : adminPaymentUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            window.open(String(adminPaymentUrl), '_blank', 'noopener')
+                            setPaymentPending(true)
+                          } catch (e) {
+                            window.location.href = String(adminPaymentUrl)
+                          }
+                        }}
+                        className={`h-11 ml-4 rounded-3xl px-6 text-sm font-semibold transition-colors ${
+                          creatingCheckout ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        Pay
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="h-11 ml-4 rounded-3xl px-6 text-sm font-semibold bg-gray-100 text-gray-400"
+                      >
+                        No payment URL
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -553,12 +588,15 @@ export default function AmproMijnProjectenDetailPage() {
                       key={n.id}
                       type="button"
                       onClick={() => openNote(n)}
-                      className="rounded-3xl border border-gray-200 p-4 text-left hover:bg-gray-50 transition-colors"
+                      className="group rounded-3xl border border-gray-200 p-4 text-left transition-colors hover:bg-gray-50 hover:border-gray-300"
                       aria-label={`Open note: ${n.title}`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm font-semibold text-gray-900">{n.title}</div>
-                        <div className="shrink-0 text-xs text-gray-500">{formatDateOnlyFromISODate(String(n.created_at))}</div>
+                        <div className="min-w-0 text-sm font-semibold text-gray-900 truncate">{n.title}</div>
+                        <div className="shrink-0 inline-flex items-center gap-2 text-xs text-gray-500">
+                          <span className="group-hover:text-gray-700">{formatDateOnlyFromISODate(String(n.created_at))}</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600" />
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -580,12 +618,15 @@ export default function AmproMijnProjectenDetailPage() {
                       key={c.id}
                       type="button"
                       onClick={() => openCorrection(c)}
-                      className="rounded-3xl border border-gray-200 p-4 text-left hover:bg-gray-50 transition-colors"
+                      className="group rounded-3xl border border-gray-200 p-4 text-left transition-colors hover:bg-gray-50 hover:border-gray-300"
                       aria-label={`Open correction from ${formatDateOnlyFromISODate(String(c.correction_date))}`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm font-semibold text-gray-900">{String(c.title || 'Correction')}</div>
-                        <div className="shrink-0 text-xs text-gray-500">{formatDateOnlyFromISODate(String(c.correction_date))}</div>
+                        <div className="min-w-0 text-sm font-semibold text-gray-900 truncate">{String(c.title || 'Correction')}</div>
+                        <div className="shrink-0 inline-flex items-center gap-2 text-xs text-gray-500">
+                          <span className="group-hover:text-gray-700">{formatDateOnlyFromISODate(String(c.correction_date))}</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600" />
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -614,7 +655,7 @@ export default function AmproMijnProjectenDetailPage() {
                   <h3 className="text-lg font-bold text-gray-900">{activeNote.title}</h3>
                   <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(activeNote.created_at))}</div>
                 </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">{activeNote.body}</div>
+                <SafeRichText value={activeNote.body} className="prose prose-sm max-w-none text-gray-700" />
               </div>
             ) : null}
           </Modal>
@@ -634,7 +675,7 @@ export default function AmproMijnProjectenDetailPage() {
                   <h3 className="text-lg font-bold text-gray-900">{String(activeCorrection.title || 'Correction')}</h3>
                   <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(activeCorrection.correction_date))}</div>
                 </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">{activeCorrection.body}</div>
+                <SafeRichText value={activeCorrection.body} className="prose prose-sm max-w-none text-gray-700" />
               </div>
             ) : null}
           </Modal>
@@ -686,9 +727,11 @@ export default function AmproMijnProjectenDetailPage() {
                         const v = availabilityDraft[String(d.id)] || { status: 'maybe' as const, comment: '' }
                         const dateLocId = (d as any)?.location_id ? String((d as any).location_id) : ''
                         const dateLoc = dateLocId ? availabilityDateLocationsById[dateLocId] : null
+                        const timeWindow = formatTimeWindow((d as any)?.start_time ?? null, (d as any)?.end_time ?? null)
                         return (
                           <div key={d.id} className="rounded-3xl border border-gray-200 p-4">
                             <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                            {timeWindow ? <div className="mt-1 text-xs text-gray-600">Time: {timeWindow}</div> : null}
                             {dateLoc ? (
                               <div className="mt-1 flex items-start gap-2 text-xs text-gray-600">
                                 <MapPin className="h-3.5 w-3.5 text-gray-400 mt-0.5" />
@@ -745,7 +788,7 @@ export default function AmproMijnProjectenDetailPage() {
                         type="button"
                         onClick={saveAvailability}
                         disabled={savingAvailability || !canEditAvailability}
-                        className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                        className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                           savingAvailability || !canEditAvailability
                             ? 'bg-blue-100 text-blue-400'
                             : 'bg-blue-600 text-white hover:bg-blue-700'

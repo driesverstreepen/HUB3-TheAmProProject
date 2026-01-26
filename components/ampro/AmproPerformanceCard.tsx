@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Calendar, ChevronRight, MapPin } from 'lucide-react'
 import { formatDateOnlyFromISODate, isISODatePast } from '@/lib/formatting'
+import SafeRichText from '@/components/SafeRichText'
 
 export type AmproPerformanceCardModel = {
   id: string
@@ -66,7 +67,7 @@ export default function AmproPerformanceCard({
           <div className="min-w-0">
             <h3 className="text-xl font-bold min-w-0 truncate text-gray-900">{performance.title}</h3>
             {performance.description ? (
-              <p className="mt-2 text-sm text-gray-500 line-clamp-3">{performance.description}</p>
+              <SafeRichText value={performance.description} className="mt-2 prose prose-sm max-w-none text-gray-500" maxLines={3} />
             ) : null}
 
             {(performance.region || performanceDatesLabel || rehearsalLabel) ? (
@@ -113,7 +114,7 @@ export default function AmproPerformanceCard({
                 e.stopPropagation()
                 router.push(applyHref)
               }}
-              className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+              className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
             >
               Inschrijven
             </button>

@@ -450,7 +450,7 @@ export default function AmproProfilePage() {
             <button
               onClick={save}
               disabled={saving}
-              className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+              className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                 saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
@@ -486,7 +486,7 @@ export default function AmproProfilePage() {
                   type="button"
                   onClick={updateEmail}
                   disabled={updatingEmail || !newEmail.trim()}
-                  className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                  className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                     updatingEmail || !newEmail.trim()
                       ? 'bg-gray-100 text-gray-400'
                       : 'bg-blue-600 text-white hover:bg-blue-700'

@@ -113,7 +113,7 @@ export default function Modal({ isOpen, onClose, children, contentClassName, con
         aria-label={ariaLabel ?? 'Dialog'}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full max-h-[90vh] overflow-y-auto ${contentClassName ?? 'bg-white dark:bg-slate-950 rounded-2xl elev-2'}`}
+        className={`relative w-full max-h-[90vh] overflow-y-auto ${contentClassName ?? 'bg-white dark:bg-gray-950 rounded-2xl elev-2'}`}
         style={{
           transform: visible ? 'translateY(0) scale(1)' : 'translateY(8px) scale(.995)',
           opacity: visible ? 1 : 0,
@@ -126,14 +126,14 @@ export default function Modal({ isOpen, onClose, children, contentClassName, con
           ...(contentStyle ?? {}),
         }}
       >
-        <div className="bg-white dark:bg-slate-950 rounded-lg p-6 md:p-8 t-body text-slate-900 dark:text-slate-100">
+        <div className="bg-white dark:bg-gray-950 rounded-full p-6 md:p-8 t-body text-gray-900 dark:text-gray-100">
           {children}
         </div>
 
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-4 right-4 p-2 rounded-md text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+          className="absolute top-4 right-4 p-2 rounded-full text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
         >
           <X size={18} />
         </button>

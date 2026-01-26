@@ -118,13 +118,13 @@ export default function AmproTopNav() {
                 <>
                   <button
                     onClick={() => router.push('/ampro/login')}
-                    className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     Login
                   </button>
                   <button
                     onClick={() => router.push('/ampro/signup')}
-                    className="inline-flex h-9 items-center justify-center rounded-3xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+                    className="inline-flex h-9 items-center justify-center rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-100"
                   >
                     Account maken
                   </button>
@@ -134,7 +134,7 @@ export default function AmproTopNav() {
                   {isAdmin ? (
                     <button
                       onClick={() => router.push('/ampro/admin')}
-                      className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+                      className="inline-flex h-9 items-center justify-center rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                       title="Admin"
                       aria-label="Admin"
                     >

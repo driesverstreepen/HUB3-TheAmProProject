@@ -13,8 +13,22 @@ type Props = {
   studioId?: string | null
 }
 
-export default function FloatingFeedbackButton({ interface: iface, studioId }: Props) {
+export default function FloatingFeedbackButton(props: Props) {
   const pathname = usePathname()
+
+  // Explicitly hide on /start and all /ampro/* pages.
+  // Keep this check in a lightweight wrapper so we avoid mounting the heavier
+  // feedback logic (auth checks, flags, etc.) on excluded routes.
+  if (pathname === '/start' || pathname?.startsWith('/start/') || pathname?.startsWith('/ampro')) {
+    return null
+  }
+
+  if (!pathname) return null
+
+  return <FloatingFeedbackButtonInner {...props} pathname={pathname} />
+}
+
+function FloatingFeedbackButtonInner({ interface: iface, studioId, pathname }: Props & { pathname: string }) {
   const { showSuccess, showError } = useNotification()
   const { isEnabled, loading: flagsLoading } = useFeatureFlags()
 
@@ -47,7 +61,6 @@ export default function FloatingFeedbackButton({ interface: iface, studioId }: P
   }, [])
 
   const canRender = useMemo(() => {
-    if (!pathname) return false
     if (flagsLoading) return false
     if (!isEnabled('ui.floating-feedback', true)) return false
     if (pathname.startsWith('/super-admin')) return false

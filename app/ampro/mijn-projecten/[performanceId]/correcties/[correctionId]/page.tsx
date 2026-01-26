@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import ContentContainer from '@/components/ContentContainer'
+import SafeRichText from '@/components/SafeRichText'
 import { supabase } from '@/lib/supabase'
 import { formatDateOnlyFromISODate } from '@/lib/formatting'
 import { useNotification } from '@/contexts/NotificationContext'
@@ -127,14 +128,9 @@ export default function AmproCorrectieDetailPage() {
             <ArrowLeft className="h-5 w-5" />
             Back
           </button>
-          <Link href="/ampro/mijn-projecten" className="text-sm text-gray-500 hover:text-gray-700">
-            My projects
-          </Link>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h1 className="text-xl font-bold text-gray-900">{correction?.title ? String(correction.title) : 'Correction'}</h1>
-
           {!hasPaid ? (
             <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
               Corrections are only visible after payment.
@@ -159,10 +155,10 @@ export default function AmproCorrectieDetailPage() {
           ) : correction ? (
             <div className="mt-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-base font-semibold text-gray-900">{String(correction.title || 'Correction')}</div>
+                <div className="text-xl font-bold text-gray-900">{String(correction.title || 'Correction')}</div>
                 <div className="text-xs text-gray-500">{formatDateOnlyFromISODate(String(correction.correction_date))}</div>
               </div>
-              <div className="text-sm text-gray-700 whitespace-pre-wrap">{correction.body}</div>
+              <SafeRichText value={correction.body} className="prose prose-sm max-w-none text-gray-700" />
             </div>
           ) : (
             <div className="mt-4 text-sm text-gray-600">Correction not found.</div>

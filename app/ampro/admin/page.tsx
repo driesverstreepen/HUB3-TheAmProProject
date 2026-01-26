@@ -15,6 +15,8 @@ import SearchFilterBar from '@/components/SearchFilterBar'
 import Select from '@/components/Select'
 import Modal from '@/components/Modal'
 import ActionIcon from '@/components/ActionIcon'
+import { RichTextEditor } from '@/components/RichTextEditor'
+import SafeRichText from '@/components/SafeRichText'
 import { MobileSidebar, type MobileSidebarSection } from '@/components/ui/MobileSidebar'
 
 type AdminSection = 'programmas' | 'forms' | 'notes' | 'corrections' | 'applications' | 'members' | 'locations' | 'availability'
@@ -178,7 +180,12 @@ export default function AmproAdminPage() {
   }
 
   function clipNotificationMessage(value: string, maxLen = 140) {
-    const v = String(value || '').trim().replace(/\s+/g, ' ')
+    const raw = String(value || '').trim()
+    const v = raw
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
     if (!v) return ''
     if (v.length <= maxLen) return v
     return `${v.slice(0, Math.max(0, maxLen - 1))}…`
@@ -488,11 +495,43 @@ export default function AmproAdminPage() {
   const [availabilityLockAt, setAvailabilityLockAt] = useState('')
   const [availabilityDatesText, setAvailabilityDatesText] = useState('')
   const [availabilityLocationByDay, setAvailabilityLocationByDay] = useState<Record<string, string>>({})
+  const [availabilityStartTimeByDay, setAvailabilityStartTimeByDay] = useState<Record<string, string>>({})
+  const [availabilityEndTimeByDay, setAvailabilityEndTimeByDay] = useState<Record<string, string>>({})
   const [availabilitySelectedUserIds, setAvailabilitySelectedUserIds] = useState<string[]>([])
   const [availabilityOverview, setAvailabilityOverview] = useState<
-    Array<{ day: string; location_id: string | null; rows: Array<{ user_id: string; status: string | null; comment: string | null }> }>
+    Array<{
+      day: string
+      location_id: string | null
+      start_time: string | null
+      end_time: string | null
+      rows: Array<{ user_id: string; status: string | null; comment: string | null }>
+    }>
   >([])
   const [savingAvailability, setSavingAvailability] = useState(false)
+
+  function normalizeTimeForInput(v: any): string {
+    if (!v) return ''
+    const s = String(v)
+    // Postgres `time` may return HH:MM:SS; input[type=time] prefers HH:MM
+    if (s.length >= 5 && /^\d{2}:\d{2}/.test(s)) return s.slice(0, 5)
+    return ''
+  }
+
+  function normalizeTimeForDb(v: any): string | null {
+    const s = String(v || '').trim()
+    if (!s) return null
+    const hhmm = s.slice(0, 5)
+    return /^\d{2}:\d{2}$/.test(hhmm) ? hhmm : null
+  }
+
+  function formatTimeWindow(start: string | null, end: string | null): string {
+    const s = normalizeTimeForInput(start)
+    const e = normalizeTimeForInput(end)
+    if (s && e) return `${s}–${e}`
+    if (s) return s
+    if (e) return e
+    return ''
+  }
 
   const parsedAvailabilityDays = useMemo(() => {
     try {
@@ -527,6 +566,8 @@ export default function AmproAdminPage() {
       setAvailabilityLockAt('')
       setAvailabilityDatesText('')
       setAvailabilityLocationByDay({})
+      setAvailabilityStartTimeByDay({})
+      setAvailabilityEndTimeByDay({})
       setAvailabilitySelectedUserIds([])
       setAvailabilityOverview([])
 
@@ -548,6 +589,8 @@ export default function AmproAdminPage() {
         setAvailabilityLockAt('')
         setAvailabilityDatesText('')
         setAvailabilityLocationByDay({})
+        setAvailabilityStartTimeByDay({})
+        setAvailabilityEndTimeByDay({})
         setAvailabilitySelectedUserIds(acceptedUserIdsForSelectedPerformance)
         setAvailabilityOverview([])
         return
@@ -565,7 +608,7 @@ export default function AmproAdminPage() {
 
       const datesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day,location_id')
+        .select('id,day,location_id,start_time,end_time')
         .eq('request_id', requestId)
         .order('day', { ascending: true })
 
@@ -578,6 +621,26 @@ export default function AmproAdminPage() {
           const day = String((d as any)?.day || '')
           const loc = (d as any)?.location_id
           if (day && loc) map[day] = String(loc)
+        }
+        return map
+      })
+
+      setAvailabilityStartTimeByDay(() => {
+        const map: Record<string, string> = {}
+        for (const d of dates) {
+          const day = String((d as any)?.day || '')
+          const t = normalizeTimeForInput((d as any)?.start_time)
+          if (day && t) map[day] = t
+        }
+        return map
+      })
+
+      setAvailabilityEndTimeByDay(() => {
+        const map: Record<string, string> = {}
+        for (const d of dates) {
+          const day = String((d as any)?.day || '')
+          const t = normalizeTimeForInput((d as any)?.end_time)
+          if (day && t) map[day] = t
         }
         return map
       })
@@ -615,6 +678,8 @@ export default function AmproAdminPage() {
       const overview = dates.map((d) => {
         const day = String(d.day)
         const locationId = (d as any)?.location_id ? String((d as any).location_id) : null
+        const startTime = (d as any)?.start_time ? String((d as any).start_time) : null
+        const endTime = (d as any)?.end_time ? String((d as any).end_time) : null
         const usersForDate = assigned
           .filter((a) => String(a.request_date_id) === String(d.id))
           .map((a) => {
@@ -624,7 +689,7 @@ export default function AmproAdminPage() {
             return { user_id: uid, status: rr?.status ?? null, comment: rr?.comment ?? null }
           })
 
-        return { day, location_id: locationId, rows: usersForDate }
+        return { day, location_id: locationId, start_time: startTime, end_time: endTime, rows: usersForDate }
       })
 
       setAvailabilityOverview(overview)
@@ -654,6 +719,15 @@ export default function AmproAdminPage() {
       for (const day of desiredDays) {
         const loc = String((availabilityLocationByDay || {})[day] || '').trim()
         if (loc) desiredLocationByDay[day] = loc
+      }
+
+      const desiredStartTimeByDay: Record<string, string> = {}
+      const desiredEndTimeByDay: Record<string, string> = {}
+      for (const day of desiredDays) {
+        const start = normalizeTimeForDb((availabilityStartTimeByDay || {})[day])
+        const end = normalizeTimeForDb((availabilityEndTimeByDay || {})[day])
+        if (start) desiredStartTimeByDay[day] = start
+        if (end) desiredEndTimeByDay[day] = end
       }
 
       const selectedUserIds = Array.from(new Set((availabilitySelectedUserIds || []).map(String).filter(Boolean)))
@@ -692,7 +766,7 @@ export default function AmproAdminPage() {
 
       const existingDatesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day,location_id')
+        .select('id,day,location_id,start_time,end_time')
         .eq('request_id', requestId)
       if (existingDatesResp.error) throw existingDatesResp.error
 
@@ -716,11 +790,19 @@ export default function AmproAdminPage() {
       if (toAddDays.length) {
         const insDates = await supabase
           .from('ampro_availability_request_dates')
-          .insert(toAddDays.map((day) => ({ request_id: requestId, day, location_id: desiredLocationByDay[day] || null })))
+          .insert(
+            toAddDays.map((day) => ({
+              request_id: requestId,
+              day,
+              location_id: desiredLocationByDay[day] || null,
+              start_time: desiredStartTimeByDay[day] || null,
+              end_time: desiredEndTimeByDay[day] || null,
+            })),
+          )
         if (insDates.error) throw insDates.error
       }
 
-      // Update per-day location for existing dates (best-effort)
+      // Update per-day fields for existing dates (best-effort)
       for (const d of existingDates) {
         const day = String((d as any)?.day || '')
         if (!day) continue
@@ -730,11 +812,20 @@ export default function AmproAdminPage() {
 
         const desiredLoc = desiredLocationByDay[day] || null
         const currentLoc = (d as any)?.location_id ? String((d as any).location_id) : null
-        if (String(desiredLoc || '') === String(currentLoc || '')) continue
+
+        const desiredStart = desiredStartTimeByDay[day] || null
+        const desiredEnd = desiredEndTimeByDay[day] || null
+        const currentStart = normalizeTimeForDb((d as any)?.start_time)
+        const currentEnd = normalizeTimeForDb((d as any)?.end_time)
+
+        const locSame = String(desiredLoc || '') === String(currentLoc || '')
+        const startSame = String(desiredStart || '') === String(currentStart || '')
+        const endSame = String(desiredEnd || '') === String(currentEnd || '')
+        if (locSame && startSame && endSame) continue
 
         const upLoc = await supabase
           .from('ampro_availability_request_dates')
-          .update({ location_id: desiredLoc })
+          .update({ location_id: desiredLoc, start_time: desiredStart, end_time: desiredEnd })
           .eq('id', id)
         if (upLoc.error) throw upLoc.error
       }
@@ -742,7 +833,7 @@ export default function AmproAdminPage() {
       // Reload dates to get all ids
       const allDatesResp = await supabase
         .from('ampro_availability_request_dates')
-        .select('id,day,location_id')
+        .select('id,day,location_id,start_time,end_time')
         .eq('request_id', requestId)
       if (allDatesResp.error) throw allDatesResp.error
       const allDates = (allDatesResp.data as any[]) || []
@@ -818,6 +909,9 @@ export default function AmproAdminPage() {
   const [newAdminPaymentUrl, setNewAdminPaymentUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [savingPaid, setSavingPaid] = useState(false)
+
+  const [memberRoleNameDraft, setMemberRoleNameDraft] = useState('')
+  const [savingMemberRoleName, setSavingMemberRoleName] = useState(false)
 
   const [editingMemberSnapshot, setEditingMemberSnapshot] = useState(false)
   const [savingMemberSnapshot, setSavingMemberSnapshot] = useState(false)
@@ -1128,6 +1222,17 @@ export default function AmproAdminPage() {
   function openMemberDetail(app: any) {
     setMemberDetailApp(app)
     setEditingMemberSnapshot(false)
+
+    try {
+      const perfId = String((app as any)?.performance_id || '')
+      const userId = String((app as any)?.user_id || '')
+      const rosterRow = (roster || []).find((r: any) => String(r?.performance_id || '') === perfId && String(r?.user_id || '') === userId)
+      const current = rosterRow?.role_name ? String(rosterRow.role_name) : ''
+      setMemberRoleNameDraft(current)
+    } catch {
+      setMemberRoleNameDraft('')
+    }
+
     const snapshot = (app as any)?.snapshot_json
     const base = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}
     setMemberSnapshotDraft({
@@ -1145,6 +1250,25 @@ export default function AmproAdminPage() {
       tshirt_size: String((base as any)?.tshirt_size ?? ''),
     })
     setMemberDetailOpen(true)
+  }
+
+  async function saveMemberRoleName() {
+    if (!memberDetailApp?.performance_id || !memberDetailApp?.user_id) return
+    try {
+      setSavingMemberRoleName(true)
+      const performanceId = String(memberDetailApp.performance_id || '')
+      const userId = String(memberDetailApp.user_id || '')
+      const next = memberRoleNameDraft.trim() || 'Dancer'
+
+      const up = await supabase.from('ampro_roster').upsert({ performance_id: performanceId, user_id: userId, role_name: next } as any)
+      if (up.error) throw up.error
+      showSuccess('Role name updated')
+      await refresh()
+    } catch (e: any) {
+      showError(e?.message || 'Failed to update role name')
+    } finally {
+      setSavingMemberRoleName(false)
+    }
   }
 
   async function saveMemberSnapshot() {
@@ -1478,7 +1602,7 @@ export default function AmproAdminPage() {
 
           const upsertRoster = await supabase
             .from('ampro_roster')
-            .upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole } as any)
+            .upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole || 'Dancer' } as any)
           if (upsertRoster.error) throw upsertRoster.error
         } else {
           const delRoster = await supabase
@@ -1545,7 +1669,9 @@ export default function AmproAdminPage() {
             }
           }
 
-          const upsertRoster = await supabase.from('ampro_roster').upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole } as any)
+          const upsertRoster = await supabase
+            .from('ampro_roster')
+            .upsert({ performance_id: performanceId, user_id: userId, role_name: inferredRole || 'Dancer' } as any)
           if (upsertRoster.error) throw upsertRoster.error
         } else {
           const delRoster = await supabase
@@ -2192,12 +2318,7 @@ export default function AmproAdminPage() {
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Description
-                  <textarea
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Description (optional)"
-                    className="min-h-28 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  />
+                  <RichTextEditor value={newDescription} onChange={setNewDescription} placeholder="Description (optional)" />
                 </label>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2321,7 +2442,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={saveProgramma}
                     disabled={saving}
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       saving ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -2361,7 +2482,7 @@ export default function AmproAdminPage() {
                     <button
                       type="button"
                       onClick={() => setNewFormFields((prev) => [...prev, makeEmptyFieldDraft()])}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                       <Plus className="h-4 w-4" />
                       Add field
@@ -2624,7 +2745,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={createForm}
                     disabled={savingForm}
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       savingForm ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -2745,7 +2866,7 @@ export default function AmproAdminPage() {
                       !inviteManageToken ||
                       (inviteManageStatus ? Boolean(inviteManageStatus.revoked) : false)
                     }
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       inviteManageLoading ||
                       !inviteManageProgram?.id ||
                       !inviteManageToken ||
@@ -2800,7 +2921,7 @@ export default function AmproAdminPage() {
                           setInviteDeleteConfirmText('')
                         }}
                         disabled={inviteManageLoading}
-                        className="h-11 rounded-3xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                        className="h-11 rounded-3xl border border-gray-200 bg-white px-8 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                       >
                         Cancel
                       </button>
@@ -2883,12 +3004,7 @@ export default function AmproAdminPage() {
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Correction
-                  <textarea
-                    value={newCorrectionBody}
-                    onChange={(e) => setNewCorrectionBody(e.target.value)}
-                    placeholder="Correction description…"
-                    className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  />
+                  <RichTextEditor value={newCorrectionBody} onChange={setNewCorrectionBody} placeholder="Correction description…" />
                 </label>
 
                 <div className="mt-2 flex items-center justify-end gap-2">
@@ -2896,7 +3012,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={saveCorrection}
                     disabled={savingCorrection}
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       savingCorrection ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -2947,12 +3063,7 @@ export default function AmproAdminPage() {
 
                 <label className="grid gap-1 text-sm font-medium text-gray-700">
                   Content
-                  <textarea
-                    value={newUpdateBody}
-                    onChange={(e) => setNewUpdateBody(e.target.value)}
-                    placeholder="Content"
-                    className="min-h-32 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  />
+                  <RichTextEditor value={newUpdateBody} onChange={setNewUpdateBody} placeholder="Content" />
                 </label>
 
                 <div className="mt-2 flex items-center justify-end gap-2">
@@ -2960,7 +3071,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={createUpdate}
                     disabled={savingUpdate}
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       savingUpdate ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -3005,7 +3116,7 @@ export default function AmproAdminPage() {
                     type="button"
                     onClick={saveLocation}
                     disabled={savingLocation}
-                    className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                    className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                       savingLocation ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -3031,6 +3142,12 @@ export default function AmproAdminPage() {
                     const profile = profilesByUserId[userId]
                     const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || userId
                     const perfTitle = performanceTitleById[String(memberDetailApp.performance_id)] || String(memberDetailApp.performance_id)
+                    const rosterRoleName =
+                      (roster || []).find(
+                        (r: any) =>
+                          String(r?.performance_id || '') === String(memberDetailApp.performance_id || '') &&
+                          String(r?.user_id || '') === String(memberDetailApp.user_id || ''),
+                      )?.role_name || null
                     const snapshot = (memberDetailApp as any)?.snapshot_json || {}
                     const answers = (memberDetailApp as any)?.answers_json || {}
 
@@ -3077,6 +3194,7 @@ export default function AmproAdminPage() {
                           <div className="text-sm font-semibold text-gray-900">{name}</div>
                           <div className="mt-1 text-sm text-gray-600">Performance: {perfTitle}</div>
                           <div className="mt-1 text-xs text-gray-500">Status: {String(memberDetailApp.status || '')}</div>
+                          {rosterRoleName ? <div className="mt-1 text-xs text-gray-500">Role: {String(rosterRoleName)}</div> : null}
                           <div className="mt-2 flex items-center gap-3">
                             {((memberDetailApp as any)?.paid) ? (
                               <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-800">Paid</span>
@@ -3088,12 +3206,40 @@ export default function AmproAdminPage() {
                               type="button"
                               onClick={toggleMemberPaid}
                               disabled={savingPaid}
-                              className={`h-8 rounded-3xl px-3 text-sm font-semibold transition-colors ${
+                              className={`h-8 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                                 savingPaid ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                               }`}
                             >
                               {savingPaid ? 'Processing…' : ((memberDetailApp as any)?.paid ? 'Mark as unpaid' : 'Mark as paid')}
                             </button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-gray-900">Roster role</div>
+                            <button
+                              type="button"
+                              onClick={saveMemberRoleName}
+                              disabled={savingMemberRoleName}
+                              className={`h-9 rounded-3xl px-8 text-sm font-semibold transition-colors ${
+                                savingMemberRoleName ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+                              }`}
+                            >
+                              {savingMemberRoleName ? 'Saving…' : 'Save role'}
+                            </button>
+                          </div>
+                          <div className="mt-3 grid gap-1">
+                            <label className="grid gap-1 text-sm font-medium text-gray-700">
+                              Role name
+                              <input
+                                value={memberRoleNameDraft}
+                                onChange={(e) => setMemberRoleNameDraft(e.target.value)}
+                                placeholder="Dancer"
+                                className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                              />
+                            </label>
+                            <div className="text-xs text-gray-500">Leave empty to default to "Dancer".</div>
                           </div>
                         </div>
 
@@ -3115,7 +3261,7 @@ export default function AmproAdminPage() {
                                     type="button"
                                     onClick={saveMemberSnapshot}
                                     disabled={savingMemberSnapshot}
-                                    className={`h-9 rounded-3xl px-3 text-sm font-semibold transition-colors ${
+                                    className={`h-9 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                                       savingMemberSnapshot ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                                   >
@@ -3356,7 +3502,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={openCreateProgrammaModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     New
@@ -3474,7 +3620,7 @@ export default function AmproAdminPage() {
                       setCollapsedFormFieldById({})
                       setFormModalOpen(true)
                     }}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     New
@@ -3560,7 +3706,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={openCreateNoteModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     New
@@ -3614,7 +3760,11 @@ export default function AmproAdminPage() {
                                           />
                                         </div>
                                       </div>
-                                      <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
+                                      <SafeRichText
+                                        value={u.body}
+                                        className="mt-2 prose prose-sm max-w-none text-gray-700"
+                                        maxLines={4}
+                                      />
                                     </div>
                                   </SortableCardItem>
                                 ))}
@@ -3647,7 +3797,11 @@ export default function AmproAdminPage() {
                                 <ActionIcon title="Delete" icon={Trash2} variant="danger" onClick={() => deleteNote(u)} aria-label="Delete" />
                               </div>
                             </div>
-                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{u.body}</div>
+                            <SafeRichText
+                              value={u.body}
+                              className="mt-2 prose prose-sm max-w-none text-gray-700"
+                              maxLines={4}
+                            />
                           </div>
                         ))}
                       </div>
@@ -3669,7 +3823,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={openCreateCorrectionModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     New
@@ -3744,7 +3898,11 @@ export default function AmproAdminPage() {
                                           />
                                         </div>
                                       </div>
-                                      <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
+                                      <SafeRichText
+                                        value={String(c.body || '')}
+                                        className="mt-2 prose prose-sm max-w-none text-gray-700"
+                                        maxLines={4}
+                                      />
                                     </div>
                                   </SortableCardItem>
                                 ))}
@@ -3766,7 +3924,11 @@ export default function AmproAdminPage() {
                             <div className="mt-0.5 text-xs text-gray-500">
                               {c.correction_date ? formatDateOnlyFromISODate(String(c.correction_date)) : '—'}
                             </div>
-                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{String(c.body || '')}</div>
+                            <SafeRichText
+                              value={String(c.body || '')}
+                              className="mt-2 prose prose-sm max-w-none text-gray-700"
+                              maxLines={4}
+                            />
                           </div>
                         ))}
                       </div>
@@ -3844,8 +4006,8 @@ export default function AmproAdminPage() {
                       </label>
 
                       <div className="rounded-3xl border border-gray-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-gray-900">Location per date (optional)</div>
-                        <div className="mt-1 text-xs text-gray-600">Choose a location from your created locations. Leave empty if not applicable.</div>
+                        <div className="text-sm font-semibold text-gray-900">Location & time per date (optional)</div>
+                        <div className="mt-1 text-xs text-gray-600">Optionally set a location and/or time window per date.</div>
 
                         {parsedAvailabilityDays.error ? (
                           <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -3855,12 +4017,15 @@ export default function AmproAdminPage() {
 
                         <div className="mt-3 grid gap-2">
                           {parsedAvailabilityDays.days.map((day) => {
-                            const value = availabilityLocationByDay[day] || ''
+                            const locValue = availabilityLocationByDay[day] || ''
+                            const start = availabilityStartTimeByDay[day] || ''
+                            const end = availabilityEndTimeByDay[day] || ''
                             return (
-                              <div key={day} className="grid grid-cols-1 md:grid-cols-2 gap-2 items-center">
+                              <div key={day} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
                                 <div className="text-sm font-medium text-gray-700">{formatDateOnlyFromISODate(day)}</div>
+
                                 <select
-                                  value={value}
+                                  value={locValue}
                                   onChange={(e) => {
                                     const next = String(e.target.value || '')
                                     setAvailabilityLocationByDay((prev) => {
@@ -3870,15 +4035,45 @@ export default function AmproAdminPage() {
                                       return out
                                     })
                                   }}
-                                  className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                                  className="h-9 rounded-xl border border-gray-200 bg-white px-2 text-sm"
                                 >
-                                  <option value="">— no location —</option>
+                                  <option value="">— location —</option>
                                   {locations.map((l: any) => (
                                     <option key={String(l.id)} value={String(l.id)}>
                                       {String(l.name || l.id)}
                                     </option>
                                   ))}
                                 </select>
+
+                                <input
+                                  type="time"
+                                  value={start}
+                                  onChange={(e) => {
+                                    const next = String(e.target.value || '')
+                                    setAvailabilityStartTimeByDay((prev) => {
+                                      const out = { ...(prev || {}) }
+                                      if (!next) delete out[day]
+                                      else out[day] = next
+                                      return out
+                                    })
+                                  }}
+                                  className="h-9 rounded-xl border border-gray-200 bg-white px-2 text-sm"
+                                />
+
+                                <input
+                                  type="time"
+                                  value={end}
+                                  onChange={(e) => {
+                                    const next = String(e.target.value || '')
+                                    setAvailabilityEndTimeByDay((prev) => {
+                                      const out = { ...(prev || {}) }
+                                      if (!next) delete out[day]
+                                      else out[day] = next
+                                      return out
+                                    })
+                                  }}
+                                  className="h-9 rounded-xl border border-gray-200 bg-white px-2 text-sm"
+                                />
                               </div>
                             )
                           })}
@@ -3948,7 +4143,7 @@ export default function AmproAdminPage() {
                           type="button"
                           onClick={saveAvailabilityConfig}
                           disabled={savingAvailability}
-                          className={`h-11 rounded-3xl px-4 text-sm font-semibold transition-colors ${
+                          className={`h-11 rounded-3xl px-8 text-sm font-semibold transition-colors ${
                             savingAvailability ? 'bg-blue-100 text-blue-400' : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
                         >
@@ -3971,6 +4166,11 @@ export default function AmproAdminPage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="text-sm font-semibold text-gray-900">{formatDateOnlyFromISODate(String(d.day))}</div>
+                                  {formatTimeWindow(d.start_time, d.end_time) ? (
+                                    <div className="mt-0.5 text-xs text-gray-600">
+                                      Time: <span className="font-semibold text-gray-900">{formatTimeWindow(d.start_time, d.end_time)}</span>
+                                    </div>
+                                  ) : null}
                                   {d.location_id ? (
                                     <div className="mt-0.5 text-xs text-gray-600">
                                       Location: <span className="font-semibold text-gray-900">{locationNameById[String(d.location_id)] || String(d.location_id)}</span>
@@ -4023,7 +4223,7 @@ export default function AmproAdminPage() {
                   <button
                     type="button"
                     onClick={openCreateLocationModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-3xl bg-blue-600 px-8 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4" />
                     New

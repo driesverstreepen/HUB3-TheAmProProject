@@ -6,9 +6,10 @@
 @custom-variant dark (&:where(body.dark, body.dark *, .dark, .dark *));
 
 :root {
+  color-scheme: light dark;
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background-start-rgb: 249, 250, 251;
+  --background-end-rgb: 249, 250, 251;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,7 +22,32 @@
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: #ffffff;
+  background-color: rgb(var(--background-start-rgb));
+  min-height: 100dvh;
+  margin: 0;
+}
+
+/*
+  The app's dark mode is controlled via `body.dark` (not only via
+  `prefers-color-scheme`). Keep the base page background in sync so iOS
+  safe-area / status-bar regions don't pick up a light tint.
+*/
+body.dark {
+  color-scheme: dark;
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body:not(.dark) {
+  color-scheme: light;
+}
+
+/* Prevent iOS Safari from auto-adjusting text sizes (helps keep app-like feel). */
+html {
+  background: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Scrollbars: hidden by default, shown briefly while scrolling.

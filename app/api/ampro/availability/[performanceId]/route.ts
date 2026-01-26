@@ -76,7 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Fetch dates and user's responses + assignment info
     const datesResp = await admin
       .from('ampro_availability_request_dates')
-      .select('id,request_id,day,location_id')
+      .select('id,request_id,day,location_id,start_time,end_time')
       .eq('request_id', requestRow.id)
       .order('day', { ascending: true })
 
